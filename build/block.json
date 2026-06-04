@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "sidemenu/sidemenu",
+  "version": "1.7.6",
+  "title": "SideMenu",
+  "category": "design",
+  "attributes": {
+    "title": {
+      "type": "string",
+      "default": "SideMenu"
+    }
+  },
+  "icon": "menu",
+  "description": "Block to show the open SideMenu button.",
+  "example": {
+    "example": {
+      "attributes": {
+        "title": "SideMenu"
+      }
+    }
+  },
+  "supports": {
+    "html": false
+  },
+  "textdomain": "sidemenu",
+  "editorScript": "file:./index.js"
+}

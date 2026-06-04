@@ -1,0 +1,135 @@
+.sidemenu {
+    position: fixed;
+    right: -100%;
+    width: 100%;
+    transition: left 0.2s ease-in-out, right 0.2s ease-in-out, opacity 0.2s ease-in-out;
+    z-index: 9999;
+    background-color: #666666;
+    top: 0;
+    bottom: 0;
+    color: #ffffff;
+	overflow-x: hidden;
+    overflow-y: scroll;
+    opacity: 0;
+}
+
+.admin-bar .sidemenu {
+    top: 32px;
+}
+
+@media screen and (min-width: 48em) {
+    .sidemenu {
+        right: -45%;
+        width: 45%;
+    }
+}
+
+.sidemenu .close_sidemenu {
+    position: absolute;
+    right: 0;
+    padding: 1rem 2rem;
+    z-index: 1000;
+    color: #ffffff;
+    text-decoration: none;
+}
+
+.sidemenu .close_sidemenu .dashicons {
+    transition: transform .2s ease-in-out;
+    font-weight: normal;
+    font-size: 32px;
+	width: 32px;
+	height: 32px;
+}
+
+.sidemenu .close_sidemenu:hover .dashicons {
+    transform: rotate(180deg);
+}
+
+.sidemenu section {
+    width: auto;
+    margin: 0 2rem;
+    padding: 2rem 0;
+    border-bottom: 1px solid #ffffff;
+    line-height: 1.8;
+}
+
+.sidemenu section>.has-background {
+    margin: 0 -2rem;
+}
+
+.sidemenu section:nth-child(2) {
+	margin-top: 2rem;
+}
+
+.sidemenu section h2 {
+    color: #ffffff;
+}
+
+.sidemenu section ul, .sidemenu section ol {
+	padding-top: 0;
+}
+
+.sidemenu section ul li, .sidemenu section ol li {
+	border: none;
+}
+
+.sidemenu section a {
+    color: #d3d3d3;
+}
+
+.sidemenu section a:hover {
+    color: #000000;
+}
+
+.sidemenu .widget li, .sidemenu .menu li {
+	list-style: none;
+	margin: 0;
+    padding: 0;
+}
+
+.sidemenu .widget ul, .sidemenu .menu {
+	list-style: none;
+	margin: 0;
+}
+
+.sidemenu_open .sidemenu {
+    right: 0;
+    opacity: 1;
+}
+
+body>.cover {
+    z-index: -1;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    opacity: 0;
+    background-color: #000000;
+    transition: opacity 0.2s ease-in-out;
+}
+
+body.admin-bar>cover {
+    top: 32px;
+}
+
+.sidemenu_open>.cover {
+    z-index: 1002;
+    opacity: 0.6;
+}
+
+body>div {
+    transition: transform .2s ease-in-out;
+}
+
+.sidemenu_open>div {
+    transform: translateX(-15%);
+}
+
+.sidemenu_open>#wpadminbar {
+    transform: none;
+}
+
+#sidemenu_hijack_toggle, #hidden_open_sidemenu {
+    display: none;
+}
