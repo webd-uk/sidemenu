@@ -1,1080 +1,1405 @@
 <?php
 /*
  * Plugin Name: SideMenu
- * Version: 1.9.0
+ * Version: 2.0
  * Plugin URI: https://webd.uk/product/sidemenu-upgrade/
- * Description: Injects a sliding side menu / sidebar into any theme!
+ * Description: Adds a customizable sliding side menu to your WordPress site.
  * Author: Webd Ltd
  * Author URI: https://webd.uk
  * License: GPLv2 or later
  * License URI: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ * Requires at least: 6.2
  * Text Domain: sidemenu
  */
-
-
 
 if (!defined('ABSPATH')) {
     exit('This isn\'t the page you\'re looking for. Move along, move along.');
 }
 
 
+if (!class_exists('sidemenuCommon')) {
 
-if (!class_exists('sidemenu_class')) {
+    require_once(dirname(__FILE__) . '/includes/class-sidemenu-common.php');
 
-	class sidemenu_class {
+}
 
-        public static $version = '1.9.0';
+// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- Shared helper property name is kept for upgrade-helper compatibility.
+sidemenuCommon::$plugin_upgrade_products = array(
+    'classic' => array(
+        'name' => 'SideMenu',
+        'prefix' => 'sidemenu',
+        'text_domain' => 'sidemenu',
+        'premium_class' => 'sidemenu_premium_class',
+        'trial' => true,
+        'upgrade' => true,
+        'product_slug' => 'sidemenu-upgrade',
+        'premium_plugin' => 'sidemenu-premium/sidemenu-premium.php',
+    ),
+    'block' => array(
+        'name' => 'SideMenu',
+        'prefix' => 'sidemenu_block',
+        'text_domain' => 'sidemenu',
+        'premium_class' => 'sidemenu_block_premium_class',
+        'trial' => true,
+        'upgrade' => true,
+        'product_slug' => 'sidemenu-block-upgrade',
+        'premium_plugin' => 'sidemenu-block-premium/sidemenu-block-premium.php',
+    ),
+);
 
-        private $mobile_toggles = array(
-            'twentyseventeen' => 'button.menu-toggle',
-            'astra' => 'button.menu-toggle',
-            'betheme' => 'a.responsive-menu-toggle, a.mobile-menu-toggle',
-            'twentytwentyone' => 'button#primary-mobile-menu.button',
-            'okab' => 'a.dima-btn-nav',
-            'Divi' => 'div.mobile_nav.closed',
-            'varia-wpcom' => '#toggle-menu',
-            'varia' => '#toggle-menu',
-            'AT10' => 'a.menu-toggle',
-            'twentytwentytwo' => 'button.wp-block-navigation__responsive-container-open',
-            'twentytwenty' => 'button.toggle.nav-toggle.mobile-nav-toggle',
-            'inspiro' => 'button.navbar-toggle',
-            'genesis' => 'button.menu-toggle',
-            'genesis-block-theme' => 'button.menu-toggle.button-toggle',
-            'Avada' => '.fusion-mobile-selector',
-            'avanam' => '.drawer-toggle'
-        );
+if (!class_exists('sidemenu_block_class')) {
 
-        private $remove_mobile_toggle = array(
-            'varia-wpcom' => '#toggle',
-            'varia' => '#toggle',
-            'Avada' => '[id^=mobile-menu-], [class^=fusion-mobile-menu-'
-        );
+    class sidemenu_block_class {
 
-        private $remove_toggle_attribute = array(
-            'twentytwentytwo' => 'data-micromodal-trigger'
-        );
+        const VERSION = '2.0';
 
-        private $reconstruct_toggle = array(
-            'twentytwenty' => true,
-            'Divi' => true,
-            'avanam' => true
-        );
+        // Plugin storage identifiers.
+        const CLASSIC_USAGE_OPTION = 'sidemenu_classic_usage_detected';
+        const DEFAULT_CONTENT_OPTION = 'sidemenu_default_content_id';
+        const CONTENT_POST_TYPE = 'sidemenu';
+        const POSITION_META_KEY = '_sidemenu_position';
 
-		function __construct() {
+        // Per-request block rendering state.
+        private $block_content_ids = array();
+        private $block_cover_rendered = false;
+        private $rendering_sidemenu_content = false;
 
-            add_action('widgets_init', array($this, 'sidemenu_sidebar_init'));
-            add_action('customize_register', array($this, 'sidemenu_customize_register'));
-            add_action('after_setup_theme', array($this, 'sidemenu_register_nav_menu'));
-            add_filter('nav_menu_meta_box_object', array($this, 'sidemenu_add_menu_meta_box'));
-            add_filter('hidden_meta_boxes', array($this, 'sidemenu_hidden_meta_boxes'), 10, 3);
+        public function init() {
+
+            if (self::sidemenu_should_load_classic_runtime()) {
+
+                self::sidemenu_load_classic_runtime();
+
+            }
+
+            // Register the block and shared SideMenu content post type.
+            add_action('init', array($this, 'sidemenu_register_block_content'));
+
+            // Pass SideMenu content options to the block editor.
+            add_action('enqueue_block_editor_assets', array($this, 'sidemenu_enqueue_block_editor_assets'));
+
+            // Register REST endpoints used by the block editor.
+            add_action('rest_api_init', array($this, 'sidemenu_rest_api_init'));
+
+            add_filter('allowed_block_types_all', array($this, 'sidemenu_filter_allowed_block_types'), 10, 2);
+
+            if (!self::sidemenu_should_load_classic_runtime() && self::sidemenu_is_classic_settings_request()) {
+
+                // Explain why Classic Customizer settings are unavailable when opened from an unsaved block.
+                add_action('customize_register', array($this, 'sidemenu_customize_register'));
+
+            }
+
+            // Detect block-mode buttons and render their SideMenu content.
+            add_filter('render_block', array($this, 'sidemenu_render_block'), 10, 2);
+
+            // Refresh classic runtime detection when post content changes.
+            add_action('wp_after_insert_post', array($this, 'sidemenu_refresh_classic_usage_option_after_insert_post'), 10, 4);
+            add_action('deleted_post', array($this, 'sidemenu_refresh_classic_usage_option_after_post_change'));
+            add_action('trashed_post', array($this, 'sidemenu_refresh_classic_usage_option_after_post_change'));
+            add_action('untrashed_post', array($this, 'sidemenu_refresh_classic_usage_option_after_post_change'));
+            add_action('switch_theme', array($this, 'sidemenu_refresh_classic_usage_option_after_post_change'));
+
+            // Refresh classic runtime detection when block widget content changes.
+            add_action('updated_option', array($this, 'sidemenu_refresh_classic_usage_option_after_option_change'), 10, 1);
+            add_action('added_option', array($this, 'sidemenu_refresh_classic_usage_option_after_option_change'), 10, 1);
+            add_action('deleted_option', array($this, 'sidemenu_refresh_classic_usage_option_after_option_change'), 10, 1);
+
+            // Build the cached classic runtime detection option when the plugin is activated.
+            register_activation_hook(__FILE__, array('sidemenu_block_class', 'sidemenu_refresh_classic_usage_option'));
 
             if (is_admin()) {
 
+                // Add settings, upgrade and trial links on the Plugins screen.
                 add_filter('plugin_action_links_' . plugin_basename(__FILE__), array($this, 'sidemenu_add_plugin_action_links'));
-                add_action('admin_notices', 'sidemenuCommon::admin_notices');
+
+                // Show and handle plugin-level admin notices.
+                add_action('admin_notices', array($this, 'sidemenu_admin_notices'));
                 add_action('wp_ajax_dismiss_sidemenu_notice_handler', 'sidemenuCommon::ajax_notice_handler');
-                add_filter('widget_form_callback', array($this, 'sidemenu_widget_form_callback'), 10, 2);
-                add_action('admin_head', array($this, 'sidemenu_admin_head'));
-                add_action('customize_controls_print_styles', array($this, 'sidemenu_admin_head'));
-                add_action('customize_controls_enqueue_scripts', array($this, 'sidemenu_enqueue_customize_controls_js'));
-
-            } else {
-
-                add_action('customize_preview_init', array($this, 'sidemenu_enqueue_customize_preview_js'));
-                add_action('wp_enqueue_scripts', array($this, 'sidemenu_enqueue_scripts'));
-                add_action('wp_footer', array($this, 'sidemenu_inject_sidebar'));
-                add_action('wp_head' , array($this, 'sidemenu_header_output'), 11);
-                add_shortcode('sidemenu', array($this, 'sidemenu_shortcode'));
-                add_filter('dynamic_sidebar_params', array($this, 'sidemenu_dynamic_sidebar_params'));
+                add_action('wp_ajax_dismiss_sidemenu_block_notice_handler', array($this, 'sidemenu_block_ajax_notice_handler'));
 
             }
 
-            add_action('init', 'sidemenu_class::sidemenu_init');
+        }
 
-		}
+        public static function plugin_path() {
 
-		function sidemenu_add_plugin_action_links($links) {
+            return plugin_dir_path(__FILE__);
 
-			$settings_links = sidemenuCommon::plugin_action_links(add_query_arg('autofocus[panel]', 'sidemenu', admin_url('customize.php')));
+        }
 
-			return array_merge($settings_links, $links);
+        public static function plugin_url() {
 
-		}
+            return plugin_dir_url(__FILE__);
 
-        function sidemenu_customize_register($wp_customize) {
+        }
 
-            $section_description = sidemenuCommon::control_section_description();
-            $upgrade_nag = sidemenuCommon::control_setting_upgrade_nag();
+        public function sidemenu_add_plugin_action_links($links) {
 
+            $settings_link = false;
 
+            if (self::sidemenu_should_load_classic_runtime()) {
+
+                $settings_link = add_query_arg('autofocus[panel]', 'sidemenu', admin_url('customize.php'));
+                $settings_links = sidemenuCommon::plugin_action_links($settings_link, false, 'classic');
+                $settings_links[] = '<a href="' . esc_url(sidemenuCommon::upgrade_link('block')) . '" title="' . esc_attr__('Upgrade SideMenu block features', 'sidemenu') . '" style="color: orange; font-weight: bold;">' . esc_html__('Block Upgrade', 'sidemenu') . '</a>';
+
+            } else {
+
+                $settings_links = sidemenuCommon::plugin_action_links($settings_link, false, 'block');
+
+            }
+
+            return array_merge($settings_links, $links);
+
+        }
+
+        public function sidemenu_admin_notices() {
+
+            if (self::sidemenu_should_load_classic_runtime()) {
+
+                sidemenuCommon::admin_notices();
+
+                return;
+
+            }
+
+            sidemenuCommon::admin_notices('block');
+
+        }
+
+        public function sidemenu_block_ajax_notice_handler() {
+
+            sidemenuCommon::ajax_notice_handler('block');
+
+        }
+
+        public function sidemenu_register_block_content() {
+
+            register_block_type(self::plugin_path() . 'build');
+            register_post_meta(
+                self::CONTENT_POST_TYPE,
+                self::POSITION_META_KEY,
+                array(
+                    'single' => true,
+                    'type' => 'string',
+                    'default' => 'right',
+                    'sanitize_callback' => array('sidemenu_block_class', 'sidemenu_sanitize_position'),
+                    'auth_callback' => array('sidemenu_block_class', 'sidemenu_can_edit_meta'),
+                    'show_in_rest' => true,
+                )
+            );
+
+            if (post_type_exists(self::CONTENT_POST_TYPE)) {
+
+                return;
+
+            }
+
+            $labels = array(
+                'name' => __('SideMenus', 'sidemenu'),
+                'singular_name' => __('SideMenu', 'sidemenu'),
+                'menu_name' => __('SideMenus', 'sidemenu'),
+                'all_items' => __('SideMenus', 'sidemenu'),
+                'add_new' => __('Add New', 'sidemenu'),
+                'add_new_item' => __('Add new SideMenu', 'sidemenu'),
+                'edit_item' => __('Edit SideMenu', 'sidemenu'),
+                'new_item' => __('New SideMenu', 'sidemenu'),
+                'view_item' => __('View SideMenu', 'sidemenu'),
+                'view_items' => __('View SideMenus', 'sidemenu'),
+                'search_items' => __('Search SideMenus', 'sidemenu'),
+                'not_found' => __('No SideMenus found', 'sidemenu'),
+                'not_found_in_trash' => __('No SideMenus found in bin', 'sidemenu'),
+                'name_admin_bar' => __('SideMenu', 'sidemenu'),
+            );
+
+            register_post_type(
+                self::CONTENT_POST_TYPE,
+                array(
+                    'label' => __('SideMenus', 'sidemenu'),
+                    'labels' => $labels,
+                    'description' => __('Reusable SideMenu content for the SideMenu block.', 'sidemenu'),
+                    'public' => true,
+                    'publicly_queryable' => false,
+                    'show_ui' => true,
+                    'show_in_rest' => true,
+                    'has_archive' => false,
+                    'show_in_menu' => true,
+                    'show_in_nav_menus' => false,
+                    'delete_with_user' => false,
+                    'exclude_from_search' => true,
+                    'capability_type' => 'post',
+                    'map_meta_cap' => true,
+                    'hierarchical' => false,
+                    'rewrite' => false,
+                    'query_var' => false,
+                    'menu_position' => 20,
+                    'menu_icon' => 'dashicons-menu',
+                    'supports' => array('title', 'editor', 'custom-fields'),
+                    'template' => self::sidemenu_content_template(),
+                )
+            );
+
+        }
+
+        public static function sidemenu_content_template() {
+
+            return array(
+                array(
+                    'core/group',
+                    array(
+                        'style' => array(
+                            'color' => array(
+                                'background' => '#666666',
+                                'text' => '#ffffff',
+                            ),
+                            'elements' => array(
+                                'link' => array(
+                                    'color' => array(
+                                        'text' => '#d3d3d3',
+                                    ),
+                                ),
+                            ),
+                            'dimensions' => array(
+                                'minHeight' => 'var(--sidemenu-block-panel-height, 100vh)',
+                            ),
+                            'spacing' => array(
+                                'padding' => array(
+                                    'top' => '2rem',
+                                    'right' => '2rem',
+                                    'bottom' => '2rem',
+                                    'left' => '2rem',
+                                ),
+                            ),
+                        ),
+                        'layout' => array(
+                            'type' => 'constrained',
+                        ),
+                    ),
+                    array(
+                        array(
+                            'core/paragraph',
+                            array(
+                                'placeholder' => __('Add SideMenu content...', 'sidemenu'),
+                            ),
+                        ),
+                    )
+                ),
+            );
+
+        }
+
+        public static function sidemenu_allowed_positions() {
+
+            return array('right', 'left');
+
+        }
+
+        public static function sidemenu_sanitize_position($position) {
+
+            $position = sanitize_key($position);
+
+            if (!in_array($position, self::sidemenu_allowed_positions(), true)) {
+
+                return 'right';
+
+            }
+
+            return $position;
+
+        }
+
+        public static function sidemenu_can_edit_meta($allowed = true, $meta_key = '', $post_id = 0) {
+
+            if (self::POSITION_META_KEY !== $meta_key) {
+
+                return false;
+
+            }
+
+            if ($post_id) {
+
+                if (self::CONTENT_POST_TYPE !== get_post_type($post_id)) {
+
+                    return false;
+
+                }
+
+                return current_user_can('edit_post', $post_id);
+
+            }
+
+            return false;
+
+        }
+
+        public static function sidemenu_get_panel_position($content_id) {
+
+            return self::sidemenu_sanitize_position(get_post_meta(absint($content_id), self::POSITION_META_KEY, true));
+
+        }
+
+        public static function sidemenu_get_content_posts() {
+
+            $posts = get_posts(
+                array(
+                    'numberposts' => -1,
+                    'post_type' => self::CONTENT_POST_TYPE,
+                    'post_status' => 'publish',
+                    'orderby' => 'title',
+                    'order' => 'ASC',
+                )
+            );
+
+            $content_posts = array();
+
+            foreach ($posts as $post) {
+
+                $content_posts[] = array(
+                    'id' => absint($post->ID),
+                    /* translators: %d: SideMenu content post ID. */
+                    'title' => $post->post_title ? $post->post_title : sprintf(__('SideMenu #%d', 'sidemenu'), absint($post->ID)),
+                    'editLink' => current_user_can('edit_post', $post->ID) ? get_edit_post_link($post->ID, '') : '',
+                );
+
+            }
+
+            return $content_posts;
+
+        }
+
+        public static function sidemenu_get_default_content_id($maybe_set = true) {
+
+            $default_content_id = absint(get_option(self::DEFAULT_CONTENT_OPTION));
+
+            if (
+                $default_content_id &&
+                'publish' === get_post_status($default_content_id) &&
+                self::CONTENT_POST_TYPE === get_post_type($default_content_id)
+            ) {
+
+                return $default_content_id;
+
+            }
+
+            if ($default_content_id) {
+
+                delete_option(self::DEFAULT_CONTENT_OPTION);
+                $default_content_id = 0;
+
+            }
+
+            $content_posts = self::sidemenu_get_content_posts();
+
+            if ($maybe_set && count($content_posts)) {
+
+                $default_content_id = absint($content_posts[0]['id']);
+                update_option(self::DEFAULT_CONTENT_OPTION, $default_content_id, false);
+
+            }
+
+            return $default_content_id;
+
+        }
+
+        public static function sidemenu_can_create_content_posts() {
+
+            if (!self::sidemenu_can_use_block()) {
+
+                return false;
+
+            }
+
+            $post_type = get_post_type_object(self::CONTENT_POST_TYPE);
+
+            if ($post_type && isset($post_type->cap->create_posts)) {
+
+                return current_user_can($post_type->cap->create_posts);
+
+            }
+
+            return current_user_can('edit_pages');
+
+        }
+
+        public static function sidemenu_can_use_block() {
+
+            return (bool) apply_filters('sidemenu_can_use_block', current_user_can('edit_pages'));
+
+        }
+
+        public function sidemenu_filter_allowed_block_types($allowed_block_types, $block_editor_context) {
+
+            if (self::sidemenu_can_use_block()) {
+
+                return $allowed_block_types;
+
+            }
+
+            if (true === $allowed_block_types) {
+
+                $registered_block_types = WP_Block_Type_Registry::get_instance()->get_all_registered();
+                $allowed_block_types = array_keys($registered_block_types);
+
+            }
+
+            if (!is_array($allowed_block_types)) {
+
+                return $allowed_block_types;
+
+            }
+
+            return array_values(array_diff($allowed_block_types, array('sidemenu/sidemenu')));
+
+        }
+
+        public function sidemenu_enqueue_block_editor_assets() {
+
+            $can_create_content = self::sidemenu_can_create_content_posts();
+            $data = array(
+                'contentPosts' => self::sidemenu_get_content_posts(),
+                'defaultContentId' => self::sidemenu_get_default_content_id(),
+                'contentPostType' => self::CONTENT_POST_TYPE,
+                'createContentUrl' => $can_create_content ? admin_url('post-new.php?post_type=' . self::CONTENT_POST_TYPE) : '',
+                'canCreateContent' => $can_create_content,
+                'customizeUrl' => self::sidemenu_classic_customizer_url(),
+                'classicCustomizerAvailable' => self::sidemenu_should_load_classic_runtime(),
+                'restNamespace' => 'sidemenu/v1',
+                'premiumBlockActive' => false,
+            );
+
+            wp_add_inline_script(
+                'sidemenu-sidemenu-editor-script',
+                'window.sideMenuBlock = ' . wp_json_encode($data) . ';',
+                'before'
+            );
+
+        }
+
+        public function sidemenu_customize_register($wp_customize) {
+
+            if (self::sidemenu_should_load_classic_runtime()) {
+
+                return;
+
+            }
 
             $wp_customize->add_section('sidemenu', array(
-                'title'     => __('SideMenu', 'sidemenu'),
-                'description'  => __('Use these options to customize the SideMenu in the current theme.', 'sidemenu') . ' ' . $section_description,
-                'priority'     => 0
-            ));
-
-            $wp_customize->add_panel('sidemenu', array(
                 'priority'       => 0,
                 'title'          => __('SideMenu', 'sidemenu'),
-                'description'    => __('Use these options to customize the SideMenu in the current theme.', 'sidemenu') . ' ' . $section_description
+                'description'  => __('No classic SideMenu Open Button has been detected and the theme is a block theme so settings are unavailable.', 'sidemenu')
             ));
 
-            $wp_customize->add_section('sidemenu_general', array(
-                'panel' => 'sidemenu',
-                'title'     => __('General Options', 'sidemenu'),
-                'description'  => __('Use these options to customize general settings of the SideMenu in the current theme.', 'sidemenu') . ' ' . $section_description,
-                'priority'     => 0
+            $wp_customize->add_control('sidemenu_classic_missing_notice', array(
+                'section'  => 'sidemenu',
+                'type'     => 'hidden',
+                'settings' => array()
             ));
 
-            $wp_customize->add_section('sidemenu_open_button', array(
-                'panel' => 'sidemenu',
-                'title'     => __('Open Button', 'sidemenu'),
-                'description'  => __('Use these options to customize the open button of the SideMenu in the current theme.', 'sidemenu') . ' ' . $section_description,
-                'priority'     => 0
-            ));
+        }
 
-            $wp_customize->add_section('sidemenu_close_button', array(
-                'panel' => 'sidemenu',
-                'title'     => __('Close Button', 'sidemenu'),
-                'description'  => __('Use these options to customize the close button of the SideMenu in the current theme.', 'sidemenu') . ' ' . $section_description,
-                'priority'     => 0
-            ));
+        public static function sidemenu_classic_customizer_url() {
 
-            $wp_customize->add_section('sidemenu_menu_items', array(
-                'panel' => 'sidemenu',
-                'title'     => __('Menu Items', 'sidemenu'),
-                'description'  => __('Use these options to customize the menu items in the SideMenu in the current theme.', 'sidemenu') . ' ' . $section_description,
-                'priority'     => 0
-            ));
+            $autofocus = self::sidemenu_should_load_classic_runtime() ? 'autofocus[panel]' : 'autofocus[section]';
 
-            $wp_customize->add_section('sidemenu_submenus', array(
-                'panel' => 'sidemenu',
-                'title'     => __('Submenus', 'sidemenu'),
-                'description'  => __('Use these options to customize submenus in the SideMenu in the current theme.', 'sidemenu') . ' ' . $section_description,
-                'priority'     => 0
-            ));
+            return add_query_arg(
+                array(
+                    $autofocus => 'sidemenu',
+                    'sidemenu_classic_settings' => 1,
+                ),
+                admin_url('customize.php')
+            );
 
-            $wp_customize->add_section('sidemenu_colors', array(
-                'panel' => 'sidemenu',
-                'title'     => __('Colors', 'sidemenu'),
-                'description'  => __('Use these options to customize color settings for the SideMenu in the current theme.', 'sidemenu') . ' ' . $section_description,
-                'priority'     => 0
-            ));
+        }
 
-            $wp_customize->add_section('sidemenu_style', array(
-                'panel' => 'sidemenu',
-                'title'     => __('Style', 'sidemenu'),
-                'description'  => __('Use these options to customize style settings for the SideMenu in the current theme.', 'sidemenu') . ' ' . $section_description,
-                'priority'     => 0
-            ));
+        public function sidemenu_rest_api_init() {
 
-            $wp_customize->add_section('sidemenu_auto_open', array(
-                'panel' => 'sidemenu',
-                'title'     => __('Auto Open', 'sidemenu'),
-                'description'  => __('Use these options to customize auto open settings for the SideMenu in the current theme.', 'sidemenu') . ' ' . $section_description,
-                'priority'     => 0
-            ));
-
-
-
-            $wp_customize->add_setting('sidemenu_hide_tooltips', array(
-                'default'       => '',
-                'type'          => 'theme_mod',
-                'transport'     => 'refresh',
-                'sanitize_callback' => 'sidemenuCommon::sanitize_boolean'
-            ));
-            $wp_customize->add_control('sidemenu_hide_tooltips', array(
-                'label'         => __('Hide Tooltips', 'sidemenu'),
-                'description'   => __('Prevent SideMenu from auto-opening when an admin is signed in and no SideMenu open button or content is detected.', 'sidemenu'),
-                'section'       => 'sidemenu_general',
-                'settings'      => 'sidemenu_hide_tooltips',
-                'type'          => 'checkbox'
-            ));
-
-            $wp_customize->add_setting('sidemenu_position', array(
-                'default'       => '',
-                'type'          => 'theme_mod',
-                'transport'     => 'refresh',
-                'sanitize_callback' => 'sidemenuCommon::sanitize_options'
-            ));
-            $wp_customize->add_control('sidemenu_position', array(
-                'label'         => __('SideMenu Position', 'sidemenu'),
-                'description'   => __('Decide if the SideMenu should appear on the left or the right.', 'sidemenu'),
-                'section'       => 'sidemenu_general',
-                'settings'      => 'sidemenu_position',
-                'type'          => 'select',
-                'choices'       => array(
-                    'left' => __('Left', 'sidemenu'),
-                    '' => __('Right', 'sidemenu')
+            register_rest_route(
+                'sidemenu/v1',
+                '/content',
+                array(
+                    'methods' => 'GET',
+                    'callback' => array($this, 'sidemenu_rest_get_content'),
+                    'permission_callback' => array($this, 'sidemenu_rest_can_edit'),
                 )
-            ));
+            );
 
-            $wp_customize->add_setting('sidemenu_use_dashicon', array(
-                'default'       => '',
-                'type'          => 'theme_mod',
-                'transport'     => 'refresh',
-                'sanitize_callback' => 'sidemenuCommon::sanitize_options'
-            ));
-            $wp_customize->add_control('sidemenu_use_dashicon', array(
-                'label'         => __('Use Hamburger Dashicon', 'sidemenu'),
-                'description'   => __('Use a hamburger Dashicon on the button used to open the SideMenu.', 'sidemenu'),
-                'section'       => 'sidemenu_open_button',
-                'settings'      => 'sidemenu_use_dashicon',
-                'type'          => 'select',
-                'choices'       => array(
-                    '' => __('No Dashicon (Default)', 'sidemenu'),
-                    'before' => __('Before Title', 'sidemenu'),
-                    'replace' => __('Replace Title', 'sidemenu'),
-                    'after' => __('After Title', 'sidemenu')
+            register_rest_route(
+                'sidemenu/v1',
+                '/default-content',
+                array(
+                    'methods' => 'POST',
+                    'callback' => array($this, 'sidemenu_rest_set_default_content'),
+                    'permission_callback' => array($this, 'sidemenu_rest_can_edit'),
+                    'args' => array(
+                        'contentId' => array(
+                            'type' => 'integer',
+                            'required' => true,
+                            'sanitize_callback' => 'absint',
+                        ),
+                    ),
                 )
-            ));
+            );
 
-            $control_label = __('Hijack Mobile Menu Button', 'sidemenu');
+            register_rest_route(
+                'sidemenu/v1',
+                '/classic-usage',
+                array(
+                    'methods' => 'GET',
+                    'callback' => array($this, 'sidemenu_rest_get_classic_usage'),
+                    'permission_callback' => array($this, 'sidemenu_rest_can_edit'),
+                )
+            );
 
-            if (isset($this->mobile_toggles[get_template()])) {
+        }
 
-                $wp_customize->add_setting('sidemenu_hijack_toggle', array(
-                    'default'       => '',
-                    'type'          => 'theme_mod',
-                    'transport'     => 'refresh',
-                    'sanitize_callback' => 'sidemenuCommon::sanitize_boolean'
-                ));
-                $wp_customize->add_control('sidemenu_hijack_toggle', array(
-                    'label'         => __('Hijack Mobile Menu Button', 'sidemenu'),
-                    'description'   => __('Use the theme\'s existing mobile menu button to open the SideMenu.', 'sidemenu'),
-                    'section'       => 'sidemenu_open_button',
-                    'settings'      => 'sidemenu_hijack_toggle',
-                    'type'          => 'checkbox'
-                ));
+        public function sidemenu_rest_can_edit() {
+
+            return self::sidemenu_can_use_block();
+
+        }
+
+        public function sidemenu_rest_get_content() {
+
+            return rest_ensure_response(
+                array(
+                    'contentPosts' => self::sidemenu_get_content_posts(),
+                    'defaultContentId' => self::sidemenu_get_default_content_id(),
+                )
+            );
+
+        }
+
+        public function sidemenu_rest_get_classic_usage() {
+
+            return rest_ensure_response(
+                array(
+                    'classicCustomizerAvailable' => self::sidemenu_should_load_classic_runtime(),
+                    'customizeUrl' => self::sidemenu_classic_customizer_url(),
+                )
+            );
+
+        }
+
+        public function sidemenu_rest_set_default_content($request) {
+
+            $content_id = absint($request->get_param('contentId'));
+
+            if (
+                $content_id &&
+                (
+                    'publish' !== get_post_status($content_id) ||
+                    self::CONTENT_POST_TYPE !== get_post_type($content_id)
+                )
+            ) {
+
+                return new WP_Error('sidemenu_invalid_content_id', __('Invalid SideMenu content.', 'sidemenu'), array('status' => 400));
+
+            }
+
+            if ($content_id) {
+
+                update_option(self::DEFAULT_CONTENT_OPTION, $content_id, false);
 
             } else {
 
-/* translators: link to plugin support forum */
-                $control_description = sprintf(wp_kses(__('If you\'d like to be able to open the SideMenu with your theme\'s existing mobile menu button, <a href="%s">submit a feature request</a>.', 'sidemenu'), array('a' => array('href' => array(), 'class' => array()))), esc_url('https://wordpress.org/support/plugin/sidemenu/'));
-                sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_hijack_toggle', 'sidemenu_open_button', $control_label, $control_description, 10);
+                delete_option(self::DEFAULT_CONTENT_OPTION);
 
             }
 
-            $wp_customize->add_setting('sidemenu_menu_item_border', array(
-                'default'           => 0,
-                'transport'         => 'refresh',
-                'sanitize_callback' => 'absint'
-            ));
-            $wp_customize->add_control('sidemenu_menu_item_border', array(
-                'label'         => __('Menu Item Border', 'sidemenu'),
-                'description'   => __('Add a border to the left of each menu item in the SideMenu.', 'sidemenu'),
-                'section'       => 'sidemenu_menu_items',
-                'settings'      => 'sidemenu_menu_item_border',
-                'type'          => 'range',
-                'input_attrs' => array(
-                    'min'   => 0,
-                    'max'   => 10,
-                    'step'  => 1
-                ),
-            ));
-
-            $wp_customize->add_setting('sidemenu_enable_dropdown', array(
-                'default'       => '',
-                'type'          => 'theme_mod',
-                'transport'     => 'refresh',
-                'sanitize_callback' => 'sidemenuCommon::sanitize_boolean'
-            ));
-            $wp_customize->add_control('sidemenu_enable_dropdown', array(
-                'label'         => __('Enable Dropdown Menus', 'sidemenu'),
-                'description'   => __('Enable "Mega Menu" style dropdown menus in the SideMenu Menu Location and Navigation Menu widgets.', 'sidemenu'),
-                'section'       => 'sidemenu_submenus',
-                'settings'      => 'sidemenu_enable_dropdown',
-                'type'          => 'checkbox'
-            ));
-
-            $wp_customize->add_setting('sidemenu_submenu_child_count', array(
-                'default'       => '',
-                'type'          => 'theme_mod',
-                'transport'     => 'refresh',
-                'sanitize_callback' => 'sidemenuCommon::sanitize_boolean'
-            ));
-            $wp_customize->add_control('sidemenu_submenu_child_count', array(
-                'label'         => __('Show Submenu Count', 'sidemenu'),
-                'description'   => __('Show the number of menu items in brackets in a submenu.', 'sidemenu'),
-                'section'       => 'sidemenu_submenus',
-                'settings'      => 'sidemenu_submenu_child_count',
-                'type'          => 'checkbox'
-            ));
-
-            $wp_customize->add_setting('sidemenu_hide_scrollbar', array(
-                'default'       => '',
-                'type'          => 'theme_mod',
-                'transport'     => 'refresh',
-                'sanitize_callback' => 'sidemenuCommon::sanitize_boolean'
-            ));
-            $wp_customize->add_control('sidemenu_hide_scrollbar', array(
-                'label'         => __('Hide SideMenu Scrollbar', 'sidemenu'),
-                'description'   => __('Hide vertical scrollbar in the SideMenu on Windows browsers when content extends the height.', 'sidemenu'),
-                'section'       => 'sidemenu_general',
-                'settings'      => 'sidemenu_hide_scrollbar',
-                'type'          => 'checkbox'
-            ));
-
-            $wp_customize->add_setting('sidemenu_z_index', array(
-                'default'           => 9999,
-                'transport'         => 'postMessage',
-                'sanitize_callback' => 'absint'
-            ));
-            $wp_customize->add_control('sidemenu_z_index', array(
-                'label'         => __('SideMenu z-index', 'sidemenu'),
-                'description'   => __('Most people can leave this as it is but if you find that something on the site is hiding the SideMenu, you may need to increase the z-index property of the SideMenu.', 'sidemenu'),
-                'section'       => 'sidemenu_general',
-                'settings'      => 'sidemenu_z_index',
-                'type'          => 'range',
-                'input_attrs' => array(
-                    'min'   => 9999,
-                    'max'   => 99999,
-                    'step'  => 1
-                ),
-            ));
-
-            $wp_customize->add_setting('sidemenu_menu_item_border_color', array(
-                'default'       => '#ffffff',
-                'type'          => 'theme_mod',
-                'transport'     => 'refresh',
-                'sanitize_callback' => 'sanitize_hex_color'
-            ));
-            $wp_customize->add_control(new WP_Customize_Color_Control($wp_customize, 'sidemenu_menu_item_border_color', array(
-                'label'         => __('Menu Item Border Color', 'sidemenu'),
-                'description'   => __('Set the color of the border on menu items if one has been added.', 'sidemenu'),
-                'section'       => 'sidemenu_colors',
-            	'settings'      => 'sidemenu_menu_item_border_color'
-            )));
-
-            $wp_customize->add_setting('sidemenu_menu_item_border_hover_color', array(
-                'default'       => '#000000',
-                'type'          => 'theme_mod',
-                'transport'     => 'refresh',
-                'sanitize_callback' => 'sanitize_hex_color'
-            ));
-            $wp_customize->add_control(new WP_Customize_Color_Control($wp_customize, 'sidemenu_menu_item_border_hover_color', array(
-                'label'         => __('Menu Item Border Hover Color', 'sidemenu'),
-                'description'   => __('Set the hover color of the border on menu items if one has been added.', 'sidemenu'),
-                'section'       => 'sidemenu_colors',
-            	'settings'      => 'sidemenu_menu_item_border_hover_color'
-            )));
-
-            $control_label = __('Dashicon', 'sidemenu');
-/* translators: link dashicon documentation */
-            $control_description = sprintf(wp_kses(__('Choose your own <a href="%s">dashicon</a> for the button that opens the SideMenu.', 'sidemenu'), array('a' => array('href' => array()))), esc_url('https://developer.wordpress.org/resource/dashicons/'));
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_dashicon', 'sidemenu_open_button', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Auto Open', 'sidemenu');
-            $control_description = __('Set which pages the SideMenu should open on automatically.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_auto_open', 'sidemenu_auto_open', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Auto-Open Delay', 'sidemenu');
-            $control_description = __('Set the delay before the SideMenu opens on posts and pages set to auto-open the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_auto_open_delay', 'sidemenu_auto_open', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Dashicon Size', 'sidemenu');
-            $control_description = __('Set the size of the dashicon.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_dashicon_size', 'sidemenu_open_button', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Transition Duration', 'sidemenu');
-            $control_description = __('Set how long it takes for the SideMenu to open.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_transition_duration', 'sidemenu_general', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Transition Effect', 'sidemenu');
-            $control_description = __('Choose the animaation effect when opening the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_transition_effect', 'sidemenu_general', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Overlay Color', 'sidemenu');
-            $control_description = __('Set the background color of the overlay that dims the main website.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_overlay_color', 'sidemenu_colors', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Overlay Opacity', 'sidemenu');
-            $control_description = __('Set the opacity of the overlay that dims the main website.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_overlay_opacity', 'sidemenu_colors', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Desktop SideMenu Width', 'sidemenu');
-            $control_description = __('Set the width of the SideMenu as a percentage of the display width on larger screens.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_width', 'sidemenu_general', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Desktop SideMenu Minimum Width', 'sidemenu');
-            $control_description = __('Set the minimum width of the SideMenu on larger screens.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_min_width', 'sidemenu_general', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Mobile SideMenu Width', 'sidemenu');
-            $control_description = __('Set the width of the SideMenu as a percentage of the display width on smaller screens.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_width_mobile', 'sidemenu_general', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Mobile SideMenu Minimum Width', 'sidemenu');
-            $control_description = __('Set the minimum width of the SideMenu on smaller screens.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_min_width_mobile', 'sidemenu_general', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Rounded Corners', 'sidemenu');
-            $control_description = __('Add rounded corners to the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_rounded_corners', 'sidemenu_general', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Height', 'sidemenu');
-            $control_description = __('Set the height of the SideMenu as a percentage of the display height.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_height', 'sidemenu_general', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Grow SideMenu Content', 'sidemenu');
-            $control_description = __('Spreads out the content of the SideMenu so that it fills the available height.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_grow_content', 'sidemenu_general', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('No Content Animation', 'sidemenu');
-            $control_description = __('Prevents the site content from moving when the SideMenu opens.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_no_content_animation', 'sidemenu_general', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Prevent Scroll Close', 'sidemenu');
-            $control_description = __('Prevents user scrolling from closing the sidemenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_prevent_scroll_close', 'sidemenu_general', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Prevent Content Click Close', 'sidemenu');
-            $control_description = __('Prevents user clicking on the site content from closing the sidemenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_prevent_content_click_close', 'sidemenu_general', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Background Color', 'sidemenu');
-            $control_description = __('Set the background color of the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_background_color', 'sidemenu_colors', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Hide Close Button', 'sidemenu');
-            $control_description = __('Do not show the SideMenu close button.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_hide_close', 'sidemenu_close_button', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Title Alignment', 'sidemenu');
-            $control_description = __('Align the titles in the SideMenu to the left, center or right.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_title_text_align', 'sidemenu_style', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Close Dashicon', 'sidemenu');
-/* translators: link to dashicon documentation */
-            $control_description = sprintf(wp_kses(__('Choose your own <a href="%s">dashicon</a> for the button that closes the SideMenu.', 'sidemenu'), array('a' => array('href' => array()))), esc_url('https://developer.wordpress.org/resource/dashicons/'));
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_close_dashicon', 'sidemenu_close_button', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Rounded Corner', 'sidemenu');
-            $control_description = __('Add a rounded corner to the SideMenu close icon (make sure you give it a background color).', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_close_rounded_corner', 'sidemenu_close_button', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Close Icon Color', 'sidemenu');
-            $control_description = __('Set the color of the close icon in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_close_icon_color', 'sidemenu_colors', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Close Icon Background Color', 'sidemenu');
-            $control_description = __('Set the color of the close icon background in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_close_icon_background_color', 'sidemenu_colors', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Title Font Case', 'sidemenu');
-            $control_description = __('Change the font case of the titles in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_title_text_transform', 'sidemenu_style', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Title Font Size', 'sidemenu');
-            $control_description = __('Change the font size of the titles in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_title_font_size', 'sidemenu_style', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Title Font Weight', 'sidemenu');
-            $control_description = __('Change the font weight of the titles in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_title_font_weight', 'sidemenu_style', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Title Color', 'sidemenu');
-            $control_description = __('Set the color of titles in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_title_color', 'sidemenu_colors', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Menu Padding', 'sidemenu');
-            $control_description = __('Set the padding inbetween menu items in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_menu_padding', 'sidemenu_style', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Sub-Menu Toggle Dashicon', 'sidemenu');
-/* translators: link to the dashicon documentation */
-            $control_description = sprintf(wp_kses(__('Choose your own <a href="%s">dashicon</a> for the sub-menu toggle button.', 'sidemenu'), array('a' => array('href' => array()))), esc_url('https://developer.wordpress.org/resource/dashicons/'));
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_submenu_toggle', 'sidemenu_submenus', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Sub-Menu Toggle Rotation', 'sidemenu');
-            $control_description = __('Choose how the sub-menu toggle should rotate on click.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_sub_menu_toggle_rotate', 'sidemenu_submenus', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Smaller Sub-Menu Items', 'sidemenu');
-            $control_description = __('Shows sub-menu items with a smaller font size than their parent\'s.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_smaller_submenu', 'sidemenu_submenus', $label = $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Text Alignment', 'sidemenu');
-            $control_description = __('Align the text in the SideMenu to the left, center or right.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_text_align', 'sidemenu_style', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Text Font Case', 'sidemenu');
-            $control_description = __('Change the font case of the text in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_text_transform', 'sidemenu_style', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Text Font Size', 'sidemenu');
-            $control_description = __('Change the font size of the text in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_text_font_size', 'sidemenu_style', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Text Color', 'sidemenu');
-            $control_description = __('Set the color of text in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_text_color', 'sidemenu_colors', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Link Color', 'sidemenu');
-            $control_description = __('Set the color of links in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_link_color', 'sidemenu_colors', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('SideMenu Link Hover Color', 'sidemenu');
-            $control_description = __('Set the color of hovered links in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_link_hover_color', 'sidemenu_colors', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Section Border Width', 'sidemenu');
-            $control_description = __('Set the width of the border inbetween sections in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_section_border_width', 'sidemenu_style', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Section Border Color', 'sidemenu');
-            $control_description = __('Set the color of the border inbetween sections in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_section_border_color', 'sidemenu_colors', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Section Border Style', 'sidemenu');
-            $control_description = __('Set the style of the border inbetween sections in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_section_border_style', 'sidemenu_style', $control_label, $control_description . ' ' . $upgrade_nag);
-
-            $control_label = __('Menu Item Hover Animation', 'sidemenu');
-            $control_description = __('Adds a hover animation underneath each menu item in the SideMenu.', 'sidemenu');
-            sidemenuCommon::add_hidden_control($wp_customize, 'sidemenu_menu_item_hover_anim', 'sidemenu_menu_items', $label = $control_label, $control_description . ' ' . $upgrade_nag);
+            return $this->sidemenu_rest_get_content();
 
         }
 
-        function sidemenu_enqueue_scripts() {
+        public static function sidemenu_get_block_content_id($attributes = array()) {
 
-            if (!is_admin()) {
+            $content_id = self::sidemenu_get_default_content_id();
 
-                wp_enqueue_style('sidemenu-css', plugin_dir_url(__FILE__) . 'css/sidemenu.css', array(), sidemenuCommon::plugin_version());
-        		wp_enqueue_script('sidemenu-js', plugin_dir_url(__FILE__) . 'js/sidemenu.js', array(), sidemenuCommon::plugin_version(), true);
-
-                $l10n = array(
-                    'arialabel' => __('Open menu', 'sidemenu')
-                );
-
-                if (get_theme_mod('sidemenu_hide_tooltips')) {
-
-                    $l10n['hidetooltips'] = true;
-
-                }
-
-                if (current_user_can('manage_options')) { 
-
-/* translators: link to legacy menu dashboard */
-                    $l10n['openbuttonhelp'] = '<h2>' . __('Nearly there ...', 'sidemenu') . '</h2><p>' . sprintf(wp_kses(__('The SideMenu has opened because you are signed in as a administrator. You need to add a button to open the SideMenu on this page by adding a <a href="%s">menu item</a> or by using a [sidemenu] shortcode.', 'sidemenu'), array('a' => array('href' => array()))), esc_url(admin_url('nav-menus.php'))) . '</p>';
-
-                }
-
-                $mod = get_theme_mod('sidemenu_use_dashicon');
-
-                if ($mod) {
-
-                    if (class_exists('sidemenuPremium') && sidemenuPremium::request_permission(true) && get_theme_mod('sidemenu_dashicon')) {
-
-                        $l10n['dashicon'] = get_theme_mod('sidemenu_dashicon');
-
-                    } else {
-
-                        $l10n['dashicon'] = 'menu-alt';
-
-                    }
-
-                    $l10n['dashiconlocation'] = $mod;
-
-                }
-
-                if (get_theme_mod('sidemenu_hijack_toggle') && isset($this->mobile_toggles[get_template()])) {
-
-                    $l10n['hijacktoggle'] = $this->mobile_toggles[get_template()];
-
-                } else {
-
-                    $l10n['hijacktoggle'] = false;
-
-                }
-
-                if (get_theme_mod('sidemenu_hijack_toggle') && isset($this->remove_mobile_toggle[get_template()])) {
-
-                    $l10n['removetoggle'] = $this->remove_mobile_toggle[get_template()];
-
-                } else {
-
-                    $l10n['removetoggle'] = false;
-
-                }
-
-                if (get_theme_mod('sidemenu_hijack_toggle') && isset($this->remove_toggle_attribute[get_template()])) {
-
-                    $l10n['removeattribute'] = $this->remove_toggle_attribute[get_template()];
-
-                } else {
-
-                    $l10n['removeattribute'] = false;
-
-                }
-
-                if (get_theme_mod('sidemenu_hijack_toggle') && isset($this->reconstruct_toggle[get_template()])) {
-
-                    $l10n['reconstructtoggle'] = $this->reconstruct_toggle[get_template()];
-
-                } else {
-
-                    $l10n['reconstructtoggle'] = false;
-
-                }
-
-                if (get_theme_mod('sidemenu_prevent_scroll_close') && class_exists('sidemenuPremium') && sidemenuPremium::request_permission(true)) {
-
-                    $l10n['scrollclose'] = false;
-
-                } else {
-
-                    $l10n['scrollclose'] = true;
-
-                }
-
-                if (get_theme_mod('sidemenu_prevent_content_click_close') && class_exists('sidemenuPremium') && sidemenuPremium::request_permission(true)) {
-
-                    $l10n['contentclickclose'] = false;
-
-                } else {
-
-                    $l10n['contentclickclose'] = true;
-
-                }
-
-                if (get_theme_mod('sidemenu_enable_dropdown')) {
-
-                    $l10n['dropdown'] = true;
-
-                }
-
-                if (get_theme_mod('sidemenu_submenu_child_count')) {
-
-                    $l10n['dropdowncount'] = true;
-
-                }
-
-                wp_localize_script(
-                    'sidemenu-js',
-                    'sideMenu',
-                    $l10n
-                );
-                wp_enqueue_style('dashicons');
-
-            }
+            return absint(apply_filters('sidemenu_block_content_id', $content_id, $attributes));
 
         }
 
-        function sidemenu_inject_sidebar() {
+        public static function sidemenu_enqueue_block_frontend_assets() {
 
-            if (!(defined('REST_REQUEST') && REST_REQUEST)) {
-
-                $show_close_icon = true;
-                $close_dashicon = 'no-alt';
-
-                if (class_exists('sidemenuPremium') && sidemenuPremium::request_permission(true)) {
-
-                    if (get_theme_mod('sidemenu_close_dashicon')) {
-
-                        $close_dashicon = sanitize_key(get_theme_mod('sidemenu_close_dashicon'));
-
-                    }
-
-                    if (get_theme_mod('sidemenu_hide_close')) {
-
-                        $show_close_icon = false;
-
-                    }
-
-                }
-
-?><section class="sidemenu"><?php
-
-                if ($show_close_icon) {
-
-?><a href="#" class="close_sidemenu" title="<?php esc_attr_e('Close menu', 'sidemenu'); ?>" aria-label="<?php esc_attr_e('Close menu', 'sidemenu'); ?>"><span class="dashicons dashicons-<?php echo esc_attr($close_dashicon); ?>"></span></a><?php
-
-                }
-
-    		    if (is_active_sidebar('sidemenu')) {
-
-                    dynamic_sidebar('sidemenu');
-
-    		    }
-
-    			if (has_nav_menu('sidemenu')) {
-
-?><section class="sidemenu-navigation" role="navigation" aria-label="<?php esc_attr_e( 'SideMenu', 'sidemenu' ); ?>"><?php
-
-                    wp_nav_menu(
-                        array(
-    					    'theme_location' => 'sidemenu'
-    				    )
-    				);
-
-?></section><!-- .sidemenu-navigation --><?php
-
-    			}
-
-    		    if (!is_active_sidebar('sidemenu') && !has_nav_menu('sidemenu') && current_user_can('manage_options')) {
-
-/* translators: links to legacy widgets and menu dashboards */
-?><section><h2><?php esc_html_e('And finally ...', 'sidemenu'); ?></h2><p><?php printf(wp_kses(__('Add some content to your SideMenu by adding a <a href="%1$s">widget</a> and / or a <a href="%2$s">menu</a> to the SideMenu.', 'sidemenu'), array('a' => array('href' => array()))), esc_url(admin_url('widgets.php')), esc_url(admin_url('nav-menus.php'))); ?></p></section><?php
-
-    		    }
-
-?></section><?php
-
-                if (get_theme_mod('sidemenu_hijack_toggle')) {
-
-?><span id="sidemenu_hijack_toggle" class="open_sidemenu"><a href="#">SideMenu</a></span><?php
-
-                }
-
-            }
-
-        }
-
-        function sidemenu_sidebar_init() {
-
-            register_sidebar(array(
-        		'name'          => __('SideMenu', 'sidemenu'),
-        		'id'            => 'sidemenu',
-        		'description'   => __('Add widgets here to appear in the SideMenu.', 'sidemenu'),
-		        'before_widget' => '<section id="%1$s" class="widget %2$s">',
-        		'after_widget'  => '</section>',
-        		'before_title'  => '<h2 class="widget-title">',
-        		'after_title'   => '</h2>',
-            ));
-
-        }
-
-        function sidemenu_register_nav_menu() {
-
-        	register_nav_menus(
-        		array(
-        			'sidemenu' => __('SideMenu', 'sidemenu')
-        		)
-        	);
-
-        }
-
-        function sidemenu_add_menu_meta_box($post_type) {
-
-            add_meta_box(
-                'sidemenu-menu-metabox',
-                __('Open SideMenu', 'sidemenu'),
-                array($this, 'sidemenu_menu_metabox'),
-                'nav-menus',
-                'side',
-                'high'
+            wp_enqueue_style('sidemenu-block-css', self::plugin_url() . 'css/sidemenu-block.css', array(), self::VERSION);
+            wp_enqueue_script('sidemenu-block-js', self::plugin_url() . 'js/sidemenu-block.js', array(), self::VERSION, true);
+            $frontend_data = apply_filters(
+                'sidemenu_block_frontend_data',
+                array(
+                    'openLabel' => __('Open menu', 'sidemenu'),
+                    'closeColor' => self::sidemenu_get_default_close_color(),
+                )
+            );
+            wp_localize_script(
+                'sidemenu-block-js',
+                'sideMenuBlockFrontend',
+                $frontend_data
             );
 
-            return $post_type;
-
         }
 
-        function sidemenu_menu_metabox() {
+        public static function sidemenu_get_default_close_color() {
 
-        	global $nav_menu_selected_id;
+            $close_color = '#000000';
 
-        	$walker = new Walker_Nav_Menu_Checklist();
-        	$current_tab = 'all';
-            $sidemenu_items = array();
+            if (function_exists('wp_theme_has_theme_json') && wp_theme_has_theme_json() && function_exists('wp_get_global_styles')) {
 
-            $sidemenu_items[] = (object) array(
-                'classes' => array('open_sidemenu'),
-                'type' => 'custom',
-                'object_id' => 1,
-                'title' => __('SideMenu', 'sidemenu'),
-                'object' => 'custom',
-                'url' => '#',
-                'attr_title' => __('Open menu', 'sidemenu'),
-                'db_id' => 0,
-                'menu_item_parent' => 0,
-                'target' => '',
-                'xfn' => ''
-            );
+                $global_styles_color = wp_get_global_styles(array('color'));
 
-        	$removed_args = array( 'action', 'customlink-tab', 'edit-menu-item', 'menu-item', 'page-tab', '_wpnonce' );
+                if (!empty($global_styles_color['text'])) {
 
-?>
+                    $close_color = sanitize_hex_color($global_styles_color['text']);
 
-	<div id="sectionarchive" class="categorydiv">
+                    if (!$close_color) {
 
-		<ul id="sectionarchive-tabs" class="sectionarchive-tabs add-menu-item-tabs">
-			<li <?php echo ( 'all' == $current_tab ? ' class="tabs"' : '' ); ?>>
-				<a class="nav-tab-link" data-type="tabs-panel-sectionarchive-all" href="<?php if ( $nav_menu_selected_id ) echo esc_url( add_query_arg( 'sectionarchive-tab', 'all', remove_query_arg( $removed_args ) ) ); ?>#tabs-panel-sectionarchive-all">
-					<?php esc_html_e('View All', 'sidemenu'); ?>
-				</a>
-			</li><!-- /.tabs -->
-		</ul>
+                        $close_color = sanitize_text_field($global_styles_color['text']);
 
-		<div id="tabs-panel-sectionarchive-all" class="tabs-panel tabs-panel-view-all <?php echo ( 'all' == $current_tab ? 'tabs-panel-active' : 'tabs-panel-inactive' ); ?>">
-			<ul id="sectionarchive-checklist-all" class="categorychecklist form-no-clear">
-			<?php
-				echo walk_nav_menu_tree(array_map('wp_setup_nav_menu_item', $sidemenu_items), 0, (object) array( 'walker' => $walker));
-			?>
-			</ul>
-		</div><!-- /.tabs-panel -->
-
-		<p class="button-controls wp-clearfix">
-			<span class="list-controls">
-				<a href="<?php echo esc_url( add_query_arg( array( 'sectionarchive-tab' => 'all', 'selectall' => 1, ), remove_query_arg( $removed_args ) )); ?>#sectionarchive" class="select-all"><?php esc_html_e('Select All', 'sidemenu'); ?></a>
-			</span>
-			<span class="add-to-menu">
-				<input type="submit"<?php wp_nav_menu_disabled_check( $nav_menu_selected_id ); ?> class="button-secondary submit-add-to-menu right" value="<?php esc_attr_e('Add to Menu', 'sidemenu'); ?>" name="add-sectionarchive-menu-item" id="submit-sectionarchive" />
-				<span class="spinner"></span>
-			</span>
-		</p>
-
-	</div><!-- /.categorydiv -->
-
-<?php
-
-        }
-
-        public function sidemenu_hidden_meta_boxes($hidden, $screen, $use_defaults) {
-
-            if (is_object($screen) && isset($screen->base) && 'nav-menus' === $screen->base) {
-
-                $hidden = array_diff($hidden, array('sidemenu-menu-metabox'));
-
-            }
-
-            return $hidden;
-
-        }
-
-        function sidemenu_header_output() {
-
-?>
-<!--Customizer CSS--> 
-<style type="text/css">
-<?php
-
-            if ('twentytwentyone' === get_template()) {
-
-?>
-.sidemenu .sub-menu-toggle {
-    display: none;
-}
-<?php
-
-            }
-
-            if (get_theme_mod('sidemenu_position')) {
-
-?>
-.sidemenu {
-    right: auto;
-    left: -100%;
-}
-
-@media screen and (min-width: 48em) {
-    .sidemenu {
-        left: -45%;
-    }
-}
-
-.sidemenu_open .sidemenu {
-    right: auto;
-    left: 0;
-}
-
-.sidemenu_open>div {
-    transform: translateX(15%);
-}
-<?php
-
-            }
-
-?>
-.sidemenu section:last-child {
-    border-bottom: none;
-}
-<?php
-
-            $mod = absint(get_theme_mod('sidemenu_menu_item_border'));
-
-            if ($mod) {
-
-                $mod_color = get_theme_mod('sidemenu_menu_item_border_color');
-                if (!$mod_color) { $mod_color = 'white'; }
-
-                $mod_hover_color = get_theme_mod('sidemenu_menu_item_border_hover_color');
-                if (!$mod_hover_color) { $mod_hover_color = 'black'; }
-
-?>
-.widget_nav_menu a, .sidemenu-navigation a {
-    border-left: <?php echo wp_kses($mod, 'strip'); ?>px solid <?php echo wp_kses($mod_color, 'strip'); ?>;
-    padding-left: 10px;
-}
-.widget_nav_menu a:hover, .sidemenu-navigation a:hover {
-    border-left-color: <?php echo wp_kses($mod_hover_color, 'strip'); ?>;
-}
-<?php
-
-            }
-
-            if (get_theme_mod('sidemenu_enable_dropdown')) {
-
-                add_filter('walker_nav_menu_start_el', array($this, 'sidemenu_add_sub_menu_toggle'), 10, 4);
-
-?>
-.submenu-toggle {
-    display: none;
-}
-.sidemenu .submenu-toggle {
-    display: inline-block;
-	transition: transform 0.25s ease-in-out;
-	cursor: pointer;
-    padding: 0;
-    width: auto;
-    height: auto;
-    margin-left: 1rem;
-    line-height: inherit;
-}
-.sidemenu .submenu-toggle.open {
-    transform: rotate(90deg);
-}
-.sidemenu section ul {
-	padding-left: 0;
-}
-.sidemenu .sub-menu {
-	display: none;
-}
-.sidemenu .sub-menu.open {
-	display: block;
-}
-<?php
-
-            }
-
-            if (get_theme_mod('sidemenu_hide_scrollbar')) {
-
-?>
-.sidemenu {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-.sidemenu::-webkit-scrollbar {
-     display: none;
-}
-<?php
-
-            }
-
-            sidemenuCommon::generate_css('.sidemenu', 'z-index', 'sidemenu_z_index');
-
-?>
-</style> 
-<!--/Customizer CSS-->
-<?php
-
-        }
-
-        public function sidemenu_shortcode($atts = array(), $content = 'SideMenu') {
-
-            if (!is_array($atts)) { $atts = array(); }
-
-            if (!$content) { $content = 'SideMenu'; }
-
-            if (isset($atts['title'])) { $content = $atts['title']; }
-
-            if (isset($atts['class'])) {
-
-                $atts['class'] = ' ' . sanitize_html_class($atts['class']);
-
-            } else {
-
-                $atts['class'] = '';
-
-            }
-
-            return '<span class="open_sidemenu' . $atts['class'] . '"><a href="#">' . sanitize_text_field($content) . '</a></span>';
-
-        }
-
-        function sidemenu_admin_head() {
-
-            global $pagenow;
-
-            if ($pagenow === 'widgets.php' || $pagenow === 'customize.php') {
-
-?>
-<style>
-    .sidemenu-class { display: none; }
-    #sidemenu .sidemenu-class, #sub-accordion-section-sidebar-widgets-sidemenu .sidemenu-class { display: block; }
-</style>
-<?php
-
-            }
-
-        }
-
-        function sidemenu_widget_form_callback( $instance, $widget ) {
-
-            if (isset($widget->id)) { echo wp_kses('<p class="sidemenu-class">SideMenu Class: <strong>' . $widget->id . '</strong></p>', 'post'); }
-
-        	return $instance;
-
-        }
-
-        function sidemenu_dynamic_sidebar_params( $params ) {
-
-        	$params[0]['before_widget'] = preg_replace('/class="/', "class=\"{$params[0]['widget_id']} ", $params[0]['before_widget'], 1);
-
-        	return $params;
-
-        }
-
-        function sidemenu_enqueue_customize_preview_js() {
-
-            wp_enqueue_script('sidemenu-customize-preview', plugin_dir_url(__FILE__) . 'js/customize-preview.js', array('jquery', 'customize-preview'), sidemenuCommon::plugin_version(), true);
-
-        }
-
-        function sidemenu_enqueue_customize_controls_js() {
-
-            wp_enqueue_script('sidemenu-customize-controls', plugin_dir_url(__FILE__) . 'js/customize-controls.js', array('jquery', 'customize-controls'), sidemenuCommon::plugin_version(), true);
-
-
-        }
-
-        public function sidemenu_add_sub_menu_toggle($output, $item, $depth, $args) {
-
-            if (((isset($args->theme_location) && $args->theme_location === 'sidemenu') || (isset($args->theme_location) && !$args->theme_location)) && in_array('menu-item-has-children', $item->classes, true)) {
-
-                $dashicon = sanitize_key(get_theme_mod('sidemenu_submenu_toggle'));
-
-                if (!$dashicon) {
-
-                    $dashicon = 'arrow-right-alt2';
+                    }
 
                 }
 
-                $output .= '<span class="submenu-toggle dashicons dashicons-dashicons dashicons-' . $dashicon. '"></span>';
+            }
+
+            return $close_color;
+
+        }
+
+        public static function sidemenu_get_panel_settings($content_id) {
+
+            $settings = array(
+                'transitionDuration' => '0.2s',
+                'desktopWidth' => '45%',
+                'desktopMinWidth' => '',
+                'mobileWidth' => '100%',
+                'mobileMinWidth' => '',
+                'height' => 'var(--sidemenu-block-panel-height, 100vh)',
+                'roundedCorners' => '',
+                'scrollClose' => true,
+                'coverClickClose' => true,
+                'autoOpen' => false,
+                'autoOpenDelay' => 0,
+                'hideCloseButton' => false,
+                'closeIcon' => 'no-alt',
+                'closeIconSize' => '32px',
+            );
+
+            return apply_filters('sidemenu_block_panel_settings', $settings, absint($content_id));
+
+        }
+
+        public static function sidemenu_sanitize_css_value($value) {
+
+            return preg_replace('/[^a-zA-Z0-9\s\.\,\-\_\%\(\)\/\:]/', '', (string) $value);
+
+        }
+
+        public static function sidemenu_panel_style($settings) {
+
+            $style_map = array(
+                'transitionDuration' => '--sidemenu-block-transition-duration',
+                'desktopWidth' => '--sidemenu-block-desktop-width',
+                'desktopMinWidth' => '--sidemenu-block-desktop-min-width',
+                'mobileWidth' => '--sidemenu-block-mobile-width',
+                'mobileMinWidth' => '--sidemenu-block-mobile-min-width',
+                'height' => '--sidemenu-block-panel-custom-height',
+                'roundedCorners' => '--sidemenu-block-border-radius',
+                'closeIconSize' => '--sidemenu-block-close-icon-size',
+            );
+            $styles = array();
+
+            foreach ($style_map as $setting_key => $css_variable) {
+
+                if (!empty($settings[$setting_key])) {
+
+                    $styles[] = $css_variable . ': ' . self::sidemenu_sanitize_css_value($settings[$setting_key]);
+
+                }
 
             }
 
-            return $output;
+            return implode('; ', $styles);
 
         }
 
-        public static function sidemenu_init() {
+        public static function sidemenu_bool_attr($value) {
 
-        	register_block_type(__DIR__ . '/build');
+            return $value ? 'true' : 'false';
 
         }
 
-	}
+        public static function sidemenu_dashicon_svg($dashicon = 'no-alt') {
 
-    if (!class_exists('sidemenuCommon')) {
+            $dashicon = sanitize_key($dashicon);
 
-        require_once(dirname(__FILE__) . '/includes/class-sidemenu-common.php');
+            if ('no-alt' !== $dashicon) {
+
+                $dashicon = 'no-alt';
+
+            }
+
+            $svg = '<svg class="sidemenu-block-close-icon sidemenu-block-close-icon-' . esc_attr($dashicon) . '" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m13.06 12 4.22-4.22-1.06-1.06L12 10.94 7.78 6.72 6.72 7.78 10.94 12l-4.22 4.22 1.06 1.06L12 13.06l4.22 4.22 1.06-1.06L13.06 12Z" /></svg>';
+
+            return apply_filters('sidemenu_block_dashicon_svg', $svg, $dashicon);
+
+        }
+
+        public static function sidemenu_block_close_button_html($content_id, $settings) {
+
+            if (!empty($settings['hideCloseButton'])) {
+
+                return '';
+
+            }
+
+            $close_html = '<button type="button" class="sidemenu-block-close" aria-label="' . esc_attr__('Close menu', 'sidemenu') . '">' . self::sidemenu_dashicon_svg($settings['closeIcon']) . '</button>';
+
+            return apply_filters('sidemenu_block_close_button_html', $close_html, absint($content_id), $settings);
+
+        }
+
+        public static function sidemenu_allowed_close_button_html() {
+
+            return array(
+                'button' => array(
+                    'type' => true,
+                    'class' => true,
+                    'aria-label' => true,
+                ),
+                'svg' => array(
+                    'class' => true,
+                    'xmlns' => true,
+                    'viewBox' => true,
+                    'aria-hidden' => true,
+                    'focusable' => true,
+                ),
+                'path' => array(
+                    'd' => true,
+                ),
+            );
+
+        }
+
+        public static function sidemenu_add_block_data_attribute($block_content, $content_id) {
+
+            if (class_exists('WP_HTML_Tag_Processor')) {
+
+                $processor = new WP_HTML_Tag_Processor($block_content);
+
+                if ($processor->next_tag()) {
+
+                    $processor->set_attribute('data-sidemenu-content-id', absint($content_id));
+
+                    return $processor->get_updated_html();
+
+                }
+
+            }
+
+            return preg_replace(
+                '/<div([^>]*)class="([^"\n]*wp-block-sidemenu-sidemenu[^"\n]*)"([^>]*)>/',
+                '<div$1class="$2"$3 data-sidemenu-content-id="' . absint($content_id) . '">',
+                $block_content,
+                1
+            );
+
+        }
+
+        public function sidemenu_render_block($block_content, $block) {
+
+            if (
+                $this->rendering_sidemenu_content ||
+                !$block_content ||
+                !is_array($block) ||
+                !isset($block['blockName']) ||
+                'sidemenu/sidemenu' !== $block['blockName']
+            ) {
+
+                return $block_content;
+
+            }
+
+            $attributes = isset($block['attrs']) && is_array($block['attrs']) ? $block['attrs'] : array();
+
+            if (
+                !isset($attributes['mode']) ||
+                'classic' === $attributes['mode']
+            ) {
+
+                return $block_content;
+
+            }
+
+            $content_id = self::sidemenu_get_block_content_id($attributes);
+
+            if (!$content_id) {
+
+                return $block_content;
+
+            }
+
+            self::sidemenu_enqueue_block_frontend_assets();
+            $block_content = self::sidemenu_add_block_data_attribute($block_content, $content_id);
+
+            return $block_content . $this->sidemenu_render_block_panel($content_id);
+
+        }
+
+        public function sidemenu_render_content_post($content_id) {
+
+            $content_post = get_post(absint($content_id));
+
+            if (
+                !$content_post ||
+                self::CONTENT_POST_TYPE !== $content_post->post_type ||
+                'publish' !== $content_post->post_status
+            ) {
+
+                return '';
+
+            }
+
+            $this->rendering_sidemenu_content = true;
+            // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Applies the core content filter to SideMenu content posts.
+            $content = apply_filters('the_content', $content_post->post_content);
+            $this->rendering_sidemenu_content = false;
+
+            return $content;
+
+        }
+
+        public function sidemenu_render_block_panel($content_id) {
+
+            $content_id = absint($content_id);
+
+            if (
+                !$content_id ||
+                in_array($content_id, $this->block_content_ids, true)
+            ) {
+
+                return '';
+
+            }
+
+            $content = $this->sidemenu_render_content_post($content_id);
+
+            if (!$content) {
+
+                return '';
+
+            }
+
+            $this->block_content_ids[] = $content_id;
+            $position = self::sidemenu_get_panel_position($content_id);
+            $settings = self::sidemenu_get_panel_settings($content_id);
+            $panel_style = self::sidemenu_panel_style($settings);
+            $close_button = self::sidemenu_block_close_button_html($content_id, $settings);
+            $cover = '';
+
+            if (!$this->block_cover_rendered) {
+
+                $this->block_cover_rendered = true;
+                $cover = '<div class="sidemenu-block-cover" hidden></div>';
+
+            }
+
+            ob_start();
+
+?><div class="sidemenu-block-panels">
+<section class="sidemenu-block-panel sidemenu-position-<?php echo esc_attr($position); ?>" id="sidemenu-block-panel-<?php echo esc_attr($content_id); ?>" data-sidemenu-panel-id="<?php echo esc_attr($content_id); ?>" data-sidemenu-position="<?php echo esc_attr($position); ?>" data-sidemenu-scroll-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['scrollClose']))); ?>" data-sidemenu-cover-click-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['coverClickClose']))); ?>" data-sidemenu-auto-open="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['autoOpen']))); ?>" data-sidemenu-auto-open-delay="<?php echo esc_attr(absint($settings['autoOpenDelay'])); ?>"<?php echo $panel_style ? ' style="' . esc_attr($panel_style) . '"' : ''; ?> aria-hidden="true">
+    <?php echo wp_kses($close_button, self::sidemenu_allowed_close_button_html()); ?>
+    <div class="sidemenu-block-content"><?php echo wp_kses_post($content); ?></div>
+</section>
+</div><?php
+
+            echo wp_kses($cover, array('div' => array('class' => true, 'hidden' => true)));
+
+            return ob_get_clean();
+
+        }
+
+        public static function sidemenu_is_block_theme() {
+
+            if (function_exists('wp_get_theme')) {
+
+                $theme = wp_get_theme();
+
+                if (is_object($theme) && method_exists($theme, 'is_block_theme')) {
+
+                    return $theme->is_block_theme();
+
+                }
+
+            }
+
+            if (function_exists('wp_is_block_theme')) {
+
+                return wp_is_block_theme();
+
+            }
+
+            return false;
+
+        }
+
+        public static function sidemenu_block_is_classic($block) {
+
+            if (!is_array($block)) {
+
+                return false;
+
+            }
+
+            if (
+                isset($block['blockName']) &&
+                'sidemenu/sidemenu' === $block['blockName']
+            ) {
+
+                $attrs = isset($block['attrs']) && is_array($block['attrs']) ? $block['attrs'] : array();
+
+                return !isset($attrs['mode']) || 'classic' === $attrs['mode'];
+
+            }
+
+            if (
+                isset($block['innerBlocks']) &&
+                is_array($block['innerBlocks'])
+            ) {
+
+                foreach ($block['innerBlocks'] as $inner_block) {
+
+                    if (self::sidemenu_block_is_classic($inner_block)) {
+
+                        return true;
+
+                    }
+
+                }
+
+            }
+
+            return false;
+
+        }
+
+        public static function sidemenu_content_has_classic_block($content) {
+
+            if (
+                !is_string($content) ||
+                (
+                    false === strpos($content, 'wp:sidemenu/sidemenu') &&
+                    false === strpos($content, 'open_sidemenu') &&
+                    false === strpos($content, '[sidemenu')
+                )
+            ) {
+
+                return false;
+
+            }
+
+            if (self::sidemenu_content_has_classic_open_button($content)) {
+
+                return true;
+
+            }
+
+            if (self::sidemenu_content_has_classic_shortcode($content)) {
+
+                return true;
+
+            }
+
+            if (false === strpos($content, 'wp:sidemenu/sidemenu')) {
+
+                return false;
+
+            }
+
+            if (!function_exists('parse_blocks')) {
+
+                return false !== strpos($content, '<!-- wp:sidemenu/sidemenu -->') || false !== strpos($content, '"mode":"classic"');
+
+            }
+
+            $blocks = parse_blocks($content);
+
+            foreach ($blocks as $block) {
+
+                if (self::sidemenu_block_is_classic($block)) {
+
+                    return true;
+
+                }
+
+            }
+
+            return false;
+
+        }
+
+        public static function sidemenu_content_may_have_classic_triggers($content) {
+
+            return is_string($content) && (
+                false !== strpos($content, 'wp:sidemenu/sidemenu') ||
+                false !== strpos($content, 'open_sidemenu') ||
+                false !== strpos($content, '[sidemenu')
+            );
+
+        }
+
+        public static function sidemenu_content_has_classic_open_button($content) {
+
+            if (!is_string($content) || false === strpos($content, 'open_sidemenu')) {
+
+                return false;
+
+            }
+
+            if (class_exists('WP_HTML_Tag_Processor')) {
+
+                $processor = new WP_HTML_Tag_Processor($content);
+
+                while ($processor->next_tag()) {
+
+                    $class = $processor->get_attribute('class');
+
+                    if (!$class) {
+
+                        continue;
+
+                    }
+
+                    $classes = preg_split('/\s+/', trim($class));
+
+                    if (
+                        in_array('open_sidemenu', $classes, true) &&
+                        !in_array('sidemenu-block-mode', $classes, true)
+                    ) {
+
+                        return true;
+
+                    }
+
+                }
+
+                return false;
+
+            }
+
+            return (bool) preg_match('/class=(["\'])(?=[^"\']*\bopen_sidemenu\b)(?![^"\']*\bsidemenu-block-mode\b)[^"\']*\1/', $content);
+
+        }
+
+        public static function sidemenu_content_has_classic_shortcode($content) {
+
+            if (!is_string($content) || false === strpos($content, '[sidemenu')) {
+
+                return false;
+
+            }
+
+            if (function_exists('has_shortcode')) {
+
+                return has_shortcode($content, 'sidemenu');
+
+            }
+
+            return (bool) preg_match('/\[sidemenu(?:[\s\]\/])/', $content);
+
+        }
+
+        public static function sidemenu_value_has_classic_block($value) {
+
+            if (is_string($value)) {
+
+                return self::sidemenu_content_has_classic_block($value);
+
+            }
+
+            if (is_array($value)) {
+
+                foreach ($value as $item) {
+
+                    if (self::sidemenu_value_has_classic_block($item)) {
+
+                        return true;
+
+                    }
+
+                }
+
+            }
+
+            return false;
+
+        }
+
+        public static function sidemenu_published_content_has_classic_triggers() {
+
+            global $wpdb;
+
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+            $contents = $wpdb->get_col(
+                $wpdb->prepare(
+                    "SELECT post_content FROM {$wpdb->posts} WHERE post_status = %s AND (post_content LIKE %s OR post_content LIKE %s OR post_content LIKE %s)",
+                    'publish',
+                    '%wp:sidemenu/sidemenu%',
+                    '%open_sidemenu%',
+                    '%[sidemenu%'
+                )
+            );
+
+            foreach ($contents as $content) {
+
+                if (self::sidemenu_content_has_classic_block($content)) {
+
+                    return true;
+
+                }
+
+            }
+
+            return false;
+
+        }
+
+        public static function sidemenu_widgets_have_classic_usage() {
+
+            $sidebars_widgets = get_option('sidebars_widgets', array());
+            $block_widgets = get_option('widget_block', array());
+
+            if (!is_array($sidebars_widgets) || !is_array($block_widgets)) {
+
+                return false;
+
+            }
+
+            foreach ($sidebars_widgets as $sidebar_id => $widget_ids) {
+
+                if ('wp_inactive_widgets' === $sidebar_id || !is_array($widget_ids)) {
+
+                    continue;
+
+                }
+
+                foreach ($widget_ids as $widget_id) {
+
+                    if (!preg_match('/^block-(\d+)$/', $widget_id, $matches)) {
+
+                        continue;
+
+                    }
+
+                    $widget_number = absint($matches[1]);
+
+                    if (!empty($block_widgets[$widget_number]['content']) && self::sidemenu_content_has_classic_block($block_widgets[$widget_number]['content'])) {
+
+                        return true;
+
+                    }
+
+                }
+
+            }
+
+            return false;
+
+        }
+
+        public static function sidemenu_widget_option_can_affect_classic_usage($option) {
+
+            return 'sidebars_widgets' === $option || 'widget_block' === $option;
+
+        }
+
+        public static function sidemenu_detect_classic_usage() {
+
+            return self::sidemenu_theme_has_classic_usage() || self::sidemenu_published_content_has_classic_triggers() || self::sidemenu_widgets_have_classic_usage();
+
+        }
+
+        public static function sidemenu_theme_has_classic_usage() {
+
+            if (get_theme_mod('sidemenu_hijack_toggle')) {
+
+                return true;
+
+            }
+
+            $sidebars_widgets = get_option('sidebars_widgets', array());
+
+            if (is_array($sidebars_widgets) && !empty($sidebars_widgets['sidemenu'])) {
+
+                return true;
+
+            }
+
+            $nav_menu_locations = get_nav_menu_locations();
+
+            return is_array($nav_menu_locations) && !empty($nav_menu_locations['sidemenu']);
+
+        }
+
+        public static function sidemenu_refresh_classic_usage_option() {
+
+            static $refreshing = false;
+
+            if ($refreshing) {
+
+                return;
+
+            }
+
+            $refreshing = true;
+
+            update_option(self::CLASSIC_USAGE_OPTION, (bool) self::sidemenu_detect_classic_usage(), false);
+
+            $refreshing = false;
+
+        }
+
+        public static function sidemenu_has_classic_usage() {
+
+            $has_classic_usage = get_option(self::CLASSIC_USAGE_OPTION, null);
+
+            if (null === $has_classic_usage) {
+
+                self::sidemenu_refresh_classic_usage_option();
+                $has_classic_usage = get_option(self::CLASSIC_USAGE_OPTION, false);
+
+            }
+
+            return (bool) $has_classic_usage;
+
+        }
+
+        public static function sidemenu_should_load_classic_runtime() {
+
+            if (!self::sidemenu_is_block_theme()) {
+
+                return true;
+
+            }
+
+            return self::sidemenu_has_classic_usage();
+
+        }
+
+        public static function sidemenu_is_classic_settings_request() {
+
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing flag for the Customizer settings screen.
+            return isset($_GET['sidemenu_classic_settings']) && '1' === sanitize_text_field(wp_unslash($_GET['sidemenu_classic_settings']));
+
+        }
+
+        public static function sidemenu_load_classic_runtime() {
+
+            require_once self::plugin_path() . 'classic-sidemenu.php';
+
+        }
+
+        public function sidemenu_refresh_classic_usage_option_after_post_change($post_id = 0, $post = null) {
+
+            if ($post_id && !self::sidemenu_post_can_affect_classic_usage($post_id, $post)) {
+
+                return;
+
+            }
+
+            self::sidemenu_refresh_classic_usage_option();
+
+        }
+
+        public function sidemenu_refresh_classic_usage_option_after_insert_post($post_id, $post, $update, $post_before) {
+
+            if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
+
+                return;
+
+            }
+
+            if (!self::sidemenu_post_can_affect_classic_usage($post_id, $post, $post_before)) {
+
+                return;
+
+            }
+
+            self::sidemenu_refresh_classic_usage_option();
+
+        }
+
+        public static function sidemenu_post_can_affect_classic_usage($post_id, $post = null, $post_before = null) {
+
+            $post_id = absint($post_id);
+
+            if (!$post_id) {
+
+                return true;
+
+            }
+
+            if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
+
+                return false;
+
+            }
+
+            if (!$post instanceof WP_Post) {
+
+                $post = get_post($post_id);
+
+            }
+
+            if (!$post) {
+
+                return true;
+
+            }
+
+            if (
+                'publish' === $post->post_status &&
+                self::sidemenu_content_may_have_classic_triggers($post->post_content)
+            ) {
+
+                return true;
+
+            }
+
+            if (
+                $post_before instanceof WP_Post &&
+                'publish' === $post_before->post_status &&
+                self::sidemenu_content_may_have_classic_triggers($post_before->post_content)
+            ) {
+
+                return true;
+
+            }
+
+            return false;
+
+        }
+
+        public function sidemenu_refresh_classic_usage_option_after_option_change($option) {
+
+            if (
+                self::CLASSIC_USAGE_OPTION === $option ||
+                self::DEFAULT_CONTENT_OPTION === $option
+            ) {
+
+                return;
+
+            }
+
+            if (self::sidemenu_widget_option_can_affect_classic_usage($option)) {
+
+                self::sidemenu_refresh_classic_usage_option();
+
+            }
+
+        }
 
     }
 
-    $sidemenu_object = new sidemenu_class();
+    $sidemenu_block = new sidemenu_block_class();
+    $sidemenu_block->init();
 
 }
-
-?>

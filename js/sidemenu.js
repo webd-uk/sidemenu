@@ -1,8 +1,12 @@
 var sidemenuJS = function() {
+    var sidemenuIsBlockModeToggle = function(element) {
+        return element && element.closest && element.closest('.sidemenu-block-mode');
+    };
+
     setTimeout(function() {
         document.body.insertBefore(document.getElementsByClassName('sidemenu')[0], document.body.firstChild);
         var sidemenuCover = document.createElement('section'),
-        sidemenuToggles = document.querySelectorAll('.open_sidemenu>a, .open_sidemenu>div>a'),
+        sidemenuToggles = document.querySelectorAll('.open_sidemenu:not(.sidemenu-block-mode)>a, .open_sidemenu:not(.sidemenu-block-mode)>div>a'),
         sidemenuHiddenButtonWrapper = document.createElement('span'),
         sidemenuHiddenButton = document.createElement('a');
         sidemenuCover.className = 'cover';
@@ -43,7 +47,7 @@ var sidemenuJS = function() {
         }
         var current_scroll = (document.documentElement.scrollTop),
         closeSideMenu = function() {
-            Array.prototype.forEach.call(document.querySelectorAll('.open_sidemenu>a, .open_sidemenu>div>a, .sidemenu .close_sidemenu'), function(sidemenuToggle) {
+            Array.prototype.forEach.call(document.querySelectorAll('.open_sidemenu:not(.sidemenu-block-mode)>a, .open_sidemenu:not(.sidemenu-block-mode)>div>a, .sidemenu .close_sidemenu'), function(sidemenuToggle) {
                 sidemenuToggle.classList.remove('open');
             });
             document.body.classList.remove('sidemenu_open');
@@ -73,8 +77,12 @@ var sidemenuJS = function() {
             document.body.classList.add('sidemenu_open');
             current_scroll = (document.documentElement.scrollTop);
         }
-        Array.prototype.forEach.call(document.querySelectorAll('a.open_sidemenu, .open_sidemenu>a, .open_sidemenu>div>a, .sidemenu .close_sidemenu'), function(sidemenuToggle) {
+        Array.prototype.forEach.call(document.querySelectorAll('a.open_sidemenu:not(.sidemenu-block-mode), .open_sidemenu:not(.sidemenu-block-mode)>a, .open_sidemenu:not(.sidemenu-block-mode)>div>a, .sidemenu .close_sidemenu'), function(sidemenuToggle) {
             sidemenuToggle.addEventListener('click', function(buttonEvent) {
+                if (sidemenuIsBlockModeToggle(this) || sidemenuIsBlockModeToggle(buttonEvent.target)) {
+                    return;
+                }
+
                 buttonEvent.preventDefault();
                 if (buttonEvent.target.classList[0] === 'open_sidemenu' || buttonEvent.target.classList[1] === 'open_sidemenu') {
                     buttonWrapper = buttonEvent.target;
@@ -125,12 +133,12 @@ var sidemenuJS = function() {
                     });
                 }
                 if (this.classList.contains('open') || (!sidemenuToggles.length && document.body.classList.contains('logged-in'))) {
-                    Array.prototype.forEach.call(document.querySelectorAll('.open_sidemenu>a, .open_sidemenu>div>a, .sidemenu .close_sidemenu'), function(sidemenuToggle) {
+                    Array.prototype.forEach.call(document.querySelectorAll('.open_sidemenu:not(.sidemenu-block-mode)>a, .open_sidemenu:not(.sidemenu-block-mode)>div>a, .sidemenu .close_sidemenu'), function(sidemenuToggle) {
                         sidemenuToggle.classList.remove('open');
                     });
                     document.body.classList.remove('sidemenu_open');
                 } else {
-                    Array.prototype.forEach.call(document.querySelectorAll('.open_sidemenu>a, .open_sidemenu>div>a, .sidemenu .close_sidemenu'), function(sidemenuToggle) {
+                    Array.prototype.forEach.call(document.querySelectorAll('.open_sidemenu:not(.sidemenu-block-mode)>a, .open_sidemenu:not(.sidemenu-block-mode)>div>a, .sidemenu .close_sidemenu'), function(sidemenuToggle) {
                         sidemenuToggle.classList.add('open');
                     });
                     document.body.classList.add('sidemenu_open');

@@ -1,6 +1,6 @@
 <?php
 /*
- * Version: 1.4.5
+ * Version: 1.4.6
  */
 
 
@@ -21,10 +21,13 @@ if (!class_exists('sidemenuCommon')) {
         public static $plugin_premium_class = 'sidemenu_premium_class';
         public static $plugin_trial = true;
         public static $plugin_upgrade = true;
+        public static $plugin_product_slug = false;
+        public static $plugin_premium_plugin = false;
+        public static $plugin_upgrade_products = array();
 
 		public static function plugin_version() {
 
-            return sidemenu_class::$version;
+            return sidemenu_block_class::VERSION;
 
         }
 
@@ -64,13 +67,96 @@ if (!class_exists('sidemenuCommon')) {
 
         }
 
-        public static function support_url() {
+        public static function upgrade_product($product = false) {
 
-            return 'https://wordpress.org/support/plugin/' . 'sidemenu' . '/';
+            if ($product && isset(self::$plugin_upgrade_products[$product]) && is_array(self::$plugin_upgrade_products[$product])) {
+
+                return array_merge(
+                    array(
+                        'name' => self::$plugin_name,
+                        'prefix' => self::$plugin_prefix,
+                        'text_domain' => self::$plugin_text_domain,
+                        'premium_class' => self::$plugin_premium_class,
+                        'trial' => self::$plugin_trial,
+                        'upgrade' => self::$plugin_upgrade,
+                        'product_slug' => self::$plugin_product_slug ? self::$plugin_product_slug : self::$plugin_text_domain . '-upgrade',
+                        'premium_plugin' => self::$plugin_premium_plugin ? self::$plugin_premium_plugin : self::$plugin_text_domain . '-premium/' . self::$plugin_prefix . '-premium.php',
+                    ),
+                    self::$plugin_upgrade_products[$product]
+                );
+
+            }
+
+            return array(
+                'name' => self::$plugin_name,
+                'prefix' => self::$plugin_prefix,
+                'text_domain' => self::$plugin_text_domain,
+                'premium_class' => self::$plugin_premium_class,
+                'trial' => self::$plugin_trial,
+                'upgrade' => self::$plugin_upgrade,
+                'product_slug' => self::$plugin_product_slug ? self::$plugin_product_slug : self::$plugin_text_domain . '-upgrade',
+                'premium_plugin' => self::$plugin_premium_plugin ? self::$plugin_premium_plugin : self::$plugin_text_domain . '-premium/' . self::$plugin_prefix . '-premium.php',
+            );
 
         }
 
-        public static function control_upgrade_text() {
+        public static function with_upgrade_product($product, $callback, $args = array()) {
+
+            if (!$product) {
+
+                return call_user_func_array($callback, $args);
+
+            }
+
+            $upgrade_product = self::upgrade_product($product);
+            $original = array(
+                'plugin_name' => self::$plugin_name,
+                'plugin_prefix' => self::$plugin_prefix,
+                'plugin_text_domain' => self::$plugin_text_domain,
+                'plugin_premium_class' => self::$plugin_premium_class,
+                'plugin_trial' => self::$plugin_trial,
+                'plugin_upgrade' => self::$plugin_upgrade,
+                'plugin_product_slug' => self::$plugin_product_slug,
+                'plugin_premium_plugin' => self::$plugin_premium_plugin,
+            );
+
+            self::$plugin_name = $upgrade_product['name'];
+            self::$plugin_prefix = $upgrade_product['prefix'];
+            self::$plugin_text_domain = $upgrade_product['text_domain'];
+            self::$plugin_premium_class = $upgrade_product['premium_class'];
+            self::$plugin_trial = $upgrade_product['trial'];
+            self::$plugin_upgrade = $upgrade_product['upgrade'];
+            self::$plugin_product_slug = $upgrade_product['product_slug'];
+            self::$plugin_premium_plugin = $upgrade_product['premium_plugin'];
+
+            $result = call_user_func_array($callback, $args);
+
+            self::$plugin_name = $original['plugin_name'];
+            self::$plugin_prefix = $original['plugin_prefix'];
+            self::$plugin_text_domain = $original['plugin_text_domain'];
+            self::$plugin_premium_class = $original['plugin_premium_class'];
+            self::$plugin_trial = $original['plugin_trial'];
+            self::$plugin_upgrade = $original['plugin_upgrade'];
+            self::$plugin_product_slug = $original['plugin_product_slug'];
+            self::$plugin_premium_plugin = $original['plugin_premium_plugin'];
+
+            return $result;
+
+        }
+
+        public static function support_url() {
+
+            return 'https://wordpress.org/support/plugin/' . self::$plugin_text_domain . '/';
+
+        }
+
+        public static function control_upgrade_text($product = false) {
+
+            if ($product) {
+
+                return self::with_upgrade_product($product, array(__CLASS__, 'control_upgrade_text'));
+
+            }
 
 /* translators: name of the plugin */
             $upgrade_text = '<a href="' . esc_url(self::upgrade_link()) . '" title="' . esc_attr(sprintf(__('Upgrade now to %s Premium', 'sidemenu'), self::$plugin_name)) . '">' . sprintf(__('Upgrade now to %s Premium', 'sidemenu'), self::$plugin_name) . '</a>';
@@ -90,7 +176,13 @@ if (!class_exists('sidemenuCommon')) {
 
         }
 
-        public static function control_section_description() {
+        public static function control_section_description($product = false) {
+
+            if ($product) {
+
+                return self::with_upgrade_product($product, array(__CLASS__, 'control_section_description'));
+
+            }
 
 /* translators: link to the plugin's support forum */
             $default_description = sprintf(wp_kses(__('If you have any requests for new features, please <a href="%s" title="Support Forum">let us know in the support forum</a>.', 'sidemenu'), array('a' => array('href' => array(), 'title' => array()))), esc_url(self::support_url()));
@@ -128,10 +220,7 @@ if (!class_exists('sidemenuCommon')) {
                 $section_description .= ' ' . sprintf(
                     wp_kses(
 /* translators: link to plugin install page */
-                        __(
-                            '<strong>To reset this section of options to default settings</strong> without affecting other sections in the customizer, install <a href="%s" title="Reset Customizer">Reset Customizer</a>.',
-                            'sidemenu'
-                        ),
+                        __('<strong>To reset this section of options to default settings</strong> without affecting other sections in the customizer, install <a href="%s" title="Reset Customizer">Reset Customizer</a>.','sidemenu'),
                         array('strong' => array(), 'a' => array('href' => array(), 'title' => array()))
                     ),
                     esc_url(
@@ -152,7 +241,13 @@ if (!class_exists('sidemenuCommon')) {
 
         }
 
-        public static function control_setting_upgrade_nag() {
+        public static function control_setting_upgrade_nag($product = false) {
+
+            if ($product) {
+
+                return self::with_upgrade_product($product, array(__CLASS__, 'control_setting_upgrade_nag'));
+
+            }
 
             $upgrade_nag = self::control_upgrade_text() . __(' to use this option.', 'sidemenu');
 
@@ -258,17 +353,25 @@ if (!class_exists('sidemenuCommon')) {
 
         }
 
-        public static function upgrade_link() {
+        public static function upgrade_link($product = false) {
+
+            if ($product) {
+
+                return self::with_upgrade_product($product, array(__CLASS__, 'upgrade_link'));
+
+            }
+
+            $upgrade_product = self::upgrade_product();
 
             if (self::$plugin_premium_class) {
 
                 if (isset($_SERVER['HTTP_HOST'])) {
 
-                    return add_query_arg('url', (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . filter_var(wp_unslash($_SERVER['HTTP_HOST'], FILTER_SANITIZE_URL)), 'https://webd.uk/product/' . 'sidemenu' . '-upgrade/');
+                    return add_query_arg('url', (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . filter_var(wp_unslash($_SERVER['HTTP_HOST'], FILTER_SANITIZE_URL)), 'https://webd.uk/product/' . $upgrade_product['product_slug'] . '/');
 
                 } else {
 
-                    return 'https://webd.uk/product/' . 'sidemenu' . '-upgrade/';
+                    return 'https://webd.uk/product/' . $upgrade_product['product_slug'] . '/';
 
                 }
 
@@ -280,13 +383,27 @@ if (!class_exists('sidemenuCommon')) {
 
         }
 
-        public static function premium_link() {
+        public static function premium_link($product = false) {
+
+            if ($product) {
+
+                return self::with_upgrade_product($product, array(__CLASS__, 'premium_link'));
+
+            }
 
             return 'https://webd.uk/downloads/';
 
         }
 
-        public static function plugin_action_links($settings_link, $premium = false) {
+        public static function plugin_action_links($settings_link = false, $premium = false, $product = false) {
+
+            if ($product) {
+
+                return self::with_upgrade_product($product, array(__CLASS__, 'plugin_action_links'), array($settings_link, $premium));
+
+            }
+
+            $upgrade_product = self::upgrade_product();
 
             if (!$premium) {
 
@@ -296,7 +413,11 @@ if (!class_exists('sidemenuCommon')) {
 
             $settings_links = array();
 
-			$settings_links[] = '<a href="' . esc_url($settings_link) . '" title="' . esc_attr(__('Settings', 'sidemenu')) . '">' . __('Settings', 'sidemenu') . '</a>';
+            if ($settings_link) {
+
+                $settings_links[] = '<a href="' . esc_url($settings_link) . '" title="' . esc_attr(__('Settings', 'sidemenu')) . '">' . __('Settings', 'sidemenu') . '</a>';
+
+            }
 
             if (!get_option(self::$plugin_prefix . '_purchased')) {
 
@@ -325,7 +446,7 @@ if (!class_exists('sidemenuCommon')) {
 
                     $settings_links[] = '<a href="' . wp_nonce_url('?activate-' . self::$plugin_prefix . '=true', self::$plugin_prefix . '_activate') . '" id="' . self::$plugin_prefix . '_activate_upgrade" title="' . esc_attr(__('Activate Purchase', 'sidemenu')) . '" onclick="jQuery(this).append(&#39; <img src=&#34;/wp-admin/images/loading.gif&#34; style=&#34;float: none; width: auto; height: auto;&#34; />&#39;); setTimeout(function(){document.getElementById(\'' . self::$plugin_prefix . '_activate_upgrade\').removeAttribute(\'href\');},1); return true;">' . __('Activate Purchase', 'sidemenu') . '</a>';
 
-                } elseif (self::$plugin_trial && !is_plugin_active('sidemenu' . '-premium/' . 'sidemenu' . '-premium.php')) {
+                } elseif (self::$plugin_trial && !is_plugin_active($upgrade_product['premium_plugin'])) {
 
 /* translators: name of the plugin */
                     $settings_links[] = '<a href="' . esc_url(self::premium_link()) . '" title="' . esc_attr(sprintf(__('Trial %s Premium', 'sidemenu'), self::$plugin_name)) . ' for 7 days">' . __('Download Trial', 'sidemenu') . '</a>';
@@ -344,7 +465,7 @@ if (!class_exists('sidemenuCommon')) {
 
         public static function plugin_row_meta($plugin_meta, $plugin_file, $plugin_data, $status) {
 
-            if ($plugin_file === 'sidemenu' . '/' . 'sidemenu' . '.php') {
+            if ($plugin_file === self::$plugin_text_domain . '/' . self::$plugin_text_domain . '.php') {
 
                 $plugin_meta[] = '<a href="' . esc_url(self::support_url()) . '" title="' . __('Problems? We are here to help!', 'sidemenu') . '" style="color: orange; font-weight: bold;">' . __('Need help?', 'sidemenu') . '</a>';
 /* translators: name of the plugin */
@@ -356,7 +477,13 @@ if (!class_exists('sidemenuCommon')) {
 
         }
 
-        public static function ajax_notice_handler() {
+        public static function ajax_notice_handler($product = false) {
+
+            if ($product) {
+
+                return self::with_upgrade_product($product, array(__CLASS__, 'ajax_notice_handler'));
+
+            }
 
             check_ajax_referer(self::$plugin_prefix . '-ajax-nonce');
 
@@ -374,7 +501,13 @@ if (!class_exists('sidemenuCommon')) {
 
         }
 
-        public static function admin_notices() {
+        public static function admin_notices($product = false) {
+
+            if ($product) {
+
+                return self::with_upgrade_product($product, array(__CLASS__, 'admin_notices'));
+
+            }
 
             if (self::$plugin_premium_class) {
 
@@ -759,5 +892,3 @@ if (!function_exists('webd_customize_register')) {
 	}
 
 }
-	
-?>

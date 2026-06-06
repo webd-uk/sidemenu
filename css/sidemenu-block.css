@@ -1,0 +1,109 @@
+.wp-block-sidemenu-sidemenu.sidemenu-block-mode .sidemenu-open-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    line-height: 1;
+    padding: 5px;
+}
+
+.wp-block-sidemenu-sidemenu.sidemenu-block-mode .sidemenu-button-icon {
+    display: block;
+    flex: 0 0 auto;
+    width: 1em;
+    height: 1em;
+    fill: currentColor;
+}
+
+.sidemenu-block-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: auto;
+    z-index: 999999;
+    --sidemenu-block-panel-height: 100vh;
+    width: var(--sidemenu-block-mobile-width, 100%);
+    min-width: var(--sidemenu-block-mobile-min-width, 0);
+    height: var(--sidemenu-block-panel-custom-height, var(--sidemenu-block-panel-height, 100vh));
+    border-radius: var(--sidemenu-block-border-radius, 0);
+    overflow-x: hidden;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform var(--sidemenu-block-transition-duration, 0.2s) ease-in-out;
+    visibility: hidden;
+}
+
+.sidemenu-block-panel.sidemenu-position-left {
+    right: auto;
+    left: 0;
+    transform: translateX(-100%);
+}
+
+.admin-bar .sidemenu-block-panel {
+    top: 32px;
+    --sidemenu-block-panel-height: calc(100vh - 32px);
+}
+
+.sidemenu-block-panel.is-open {
+    transform: translateX(0);
+    visibility: visible;
+}
+
+.sidemenu-block-close {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 1;
+    padding: 1rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.sidemenu-block-close-icon {
+    display: block;
+    width: var(--sidemenu-block-close-icon-size, 32px);
+    height: var(--sidemenu-block-close-icon-size, 32px);
+    fill: currentColor;
+    transition: transform 0.2s ease-in-out;
+}
+
+.sidemenu-block-close:hover .sidemenu-block-close-icon {
+    transform: rotate(180deg);
+}
+
+.sidemenu-block-close:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -0.5rem;
+}
+
+.sidemenu-block-content {
+    min-height: 100%;
+}
+
+.sidemenu-block-cover {
+    position: fixed;
+    inset: 0;
+    z-index: 999998;
+    background: #000000;
+    opacity: 0;
+    transition: opacity var(--sidemenu-block-transition-duration, 0.2s) ease-in-out;
+}
+
+.sidemenu-block-cover.is-open {
+    opacity: 0.6;
+}
+
+@media screen and (max-width: 782px) {
+    .admin-bar .sidemenu-block-panel {
+        top: 46px;
+        --sidemenu-block-panel-height: calc(100vh - 46px);
+    }
+}
+
+@media screen and (min-width: 782px) {
+    .sidemenu-block-panel {
+        width: var(--sidemenu-block-desktop-width, 45%);
+        min-width: var(--sidemenu-block-desktop-min-width, 0);
+    }
+}
