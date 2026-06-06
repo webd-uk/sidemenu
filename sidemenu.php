@@ -244,6 +244,120 @@ if (!class_exists('sidemenu_block_class')) {
 
         public static function sidemenu_content_template() {
 
+            $example_blocks = array(
+                array(
+                    'core/heading',
+                    array(
+                        'content' => __('Example SideMenu', 'sidemenu'),
+                    ),
+                ),
+                array(
+                    'core/paragraph',
+                    array(
+                        'content' => __('Add and arrange blocks here to create your SideMenu content.', 'sidemenu'),
+                    ),
+                ),
+            );
+            $block_registry = WP_Block_Type_Registry::get_instance();
+
+            if ($block_registry->is_registered('core/accordion')) {
+
+                $example_blocks[] = array(
+                    'core/accordion',
+                    array(
+                        'iconPosition' => 'left',
+                        'autoclose' => true,
+                    ),
+                    array(
+                        array(
+                            'core/accordion-item',
+                            array(),
+                            array(
+                                array(
+                                    'core/accordion-heading',
+                                    array(
+                                        'title' => __('Useful links', 'sidemenu'),
+                                        'iconPosition' => 'left',
+                                    ),
+                                ),
+                                array(
+                                    'core/accordion-panel',
+                                    array(),
+                                    array(
+                                        array(
+                                            'core/list',
+                                            array(),
+                                            array(
+                                                array(
+                                                    'core/list-item',
+                                                    array(
+                                                        'content' => __('Menu item 1', 'sidemenu'),
+                                                    ),
+                                                ),
+                                                array(
+                                                    'core/list-item',
+                                                    array(
+                                                        'content' => __('Menu item 2', 'sidemenu'),
+                                                    ),
+                                                ),
+                                                array(
+                                                    'core/list-item',
+                                                    array(
+                                                        'content' => __('Menu item 3', 'sidemenu'),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                        array(
+                            'core/accordion-item',
+                            array(),
+                            array(
+                                array(
+                                    'core/accordion-heading',
+                                    array(
+                                        'title' => __('More information', 'sidemenu'),
+                                        'iconPosition' => 'left',
+                                    ),
+                                ),
+                                array(
+                                    'core/accordion-panel',
+                                    array(),
+                                    array(
+                                        array(
+                                            'core/paragraph',
+                                            array(
+                                                'content' => __('Add more SideMenu content here.', 'sidemenu'),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                );
+
+            } else {
+
+                $example_blocks[] = array(
+                    'core/navigation',
+                    array(
+                        'overlayMenu' => 'never',
+                        'layout' => array(
+                            'type' => 'flex',
+                            'orientation' => 'vertical',
+                        ),
+                    ),
+                    array(
+                        array('core/page-list'),
+                    ),
+                );
+
+            }
+
             return array(
                 array(
                     'core/group',
@@ -265,7 +379,7 @@ if (!class_exists('sidemenu_block_class')) {
                             ),
                             'spacing' => array(
                                 'padding' => array(
-                                    'top' => '2rem',
+                                    'top' => '4rem',
                                     'right' => '2rem',
                                     'bottom' => '2rem',
                                     'left' => '2rem',
@@ -276,14 +390,7 @@ if (!class_exists('sidemenu_block_class')) {
                             'type' => 'constrained',
                         ),
                     ),
-                    array(
-                        array(
-                            'core/paragraph',
-                            array(
-                                'placeholder' => __('Add SideMenu content...', 'sidemenu'),
-                            ),
-                        ),
-                    )
+                    $example_blocks
                 ),
             );
 
