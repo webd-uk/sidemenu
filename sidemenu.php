@@ -679,7 +679,6 @@ if (!class_exists('sidemenu_block_class')) {
                 'autoOpen' => false,
                 'autoOpenDelay' => 0,
                 'hideCloseButton' => false,
-                'closeIcon' => 'no-alt',
                 'closeIconSize' => '32px',
             );
 
@@ -727,19 +726,11 @@ if (!class_exists('sidemenu_block_class')) {
 
         }
 
-        public static function sidemenu_dashicon_svg($dashicon = 'no-alt') {
+        public static function sidemenu_close_icon_svg($content_id, $settings) {
 
-            $dashicon = sanitize_key($dashicon);
+            $svg = '<svg class="sidemenu-block-close-icon" xmlns="http://www.w3.org/2000/svg" viewBox="3 3 18 18" aria-hidden="true" focusable="false"><path d="m13.06 12 4.22-4.22-1.06-1.06L12 10.94 7.78 6.72 6.72 7.78 10.94 12l-4.22 4.22 1.06 1.06L12 13.06l4.22 4.22 1.06-1.06L13.06 12Z" /></svg>';
 
-            if ('no-alt' !== $dashicon) {
-
-                $dashicon = 'no-alt';
-
-            }
-
-            $svg = '<svg class="sidemenu-block-close-icon sidemenu-block-close-icon-' . esc_attr($dashicon) . '" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m13.06 12 4.22-4.22-1.06-1.06L12 10.94 7.78 6.72 6.72 7.78 10.94 12l-4.22 4.22 1.06 1.06L12 13.06l4.22 4.22 1.06-1.06L13.06 12Z" /></svg>';
-
-            return apply_filters('sidemenu_block_dashicon_svg', $svg, $dashicon);
+            return apply_filters('sidemenu_block_close_icon_svg', $svg, absint($content_id), $settings);
 
         }
 
@@ -751,7 +742,7 @@ if (!class_exists('sidemenu_block_class')) {
 
             }
 
-            $close_html = '<button type="button" class="sidemenu-block-close" aria-label="' . esc_attr__('Close menu', 'sidemenu') . '">' . self::sidemenu_dashicon_svg($settings['closeIcon']) . '</button>';
+            $close_html = '<button type="button" class="sidemenu-block-close" aria-label="' . esc_attr__('Close menu', 'sidemenu') . '">' . self::sidemenu_close_icon_svg($content_id, $settings) . '</button>';
 
             return apply_filters('sidemenu_block_close_button_html', $close_html, absint($content_id), $settings);
 
@@ -768,12 +759,36 @@ if (!class_exists('sidemenu_block_class')) {
                 'svg' => array(
                     'class' => true,
                     'xmlns' => true,
-                    'viewBox' => true,
+                    'viewbox' => true,
                     'aria-hidden' => true,
                     'focusable' => true,
                 ),
                 'path' => array(
                     'd' => true,
+                    'fill' => true,
+                    'fill-rule' => true,
+                    'transform' => true,
+                ),
+                'polygon' => array(
+                    'fill' => true,
+                    'fill-rule' => true,
+                    'points' => true,
+                    'transform' => true,
+                ),
+                'circle' => array(
+                    'cx' => true,
+                    'cy' => true,
+                    'r' => true,
+                    'fill' => true,
+                    'transform' => true,
+                ),
+                'rect' => array(
+                    'x' => true,
+                    'y' => true,
+                    'width' => true,
+                    'height' => true,
+                    'fill' => true,
+                    'transform' => true,
                 ),
             );
 
@@ -839,6 +854,7 @@ if (!class_exists('sidemenu_block_class')) {
 
             self::sidemenu_enqueue_block_frontend_assets();
             $block_content = self::sidemenu_add_block_data_attribute($block_content, $content_id);
+            $block_content = apply_filters('sidemenu_block_open_button_html', $block_content, $attributes, $content_id);
 
             return $block_content . $this->sidemenu_render_block_panel($content_id);
 

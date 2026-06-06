@@ -15,6 +15,11 @@
     var useState = wp.element.useState;
     var apiFetch = wp.apiFetch;
     var data = wp.data;
+    var applyFilters = wp.hooks && wp.hooks.applyFilters
+        ? wp.hooks.applyFilters
+        : function(hookName, value) {
+            return value;
+        };
     var registerPlugin = wp.plugins && wp.plugins.registerPlugin;
     var PluginDocumentSettingPanel = wp.editPost && wp.editPost.PluginDocumentSettingPanel;
     var getBorderClassesAndStyles = wp.blockEditor.__experimentalGetBorderClassesAndStyles;
@@ -98,11 +103,12 @@
         return props;
     }
 
-    function menuIcon(attributes) {
+    function menuIcon(attributes, context) {
         var icon = attributes.menuIcon || 'menu';
+        var iconElement;
 
         if ('menu' === icon) {
-            return el(
+            iconElement = el(
                 'svg',
                 {
                     className: 'sidemenu-button-icon',
@@ -115,31 +121,38 @@
                 },
                 el('path', { d: 'M5 5v1.5h14V5H5zm0 7.8h14v-1.5H5v1.5zM5 19h14v-1.5H5V19z' })
             );
+        } else {
+            iconElement = el(
+                'svg',
+                {
+                    className: 'sidemenu-button-icon',
+                    xmlns: 'http://www.w3.org/2000/svg',
+                    viewBox: '0 0 24 24',
+                    width: '1em',
+                    height: '1em',
+                    'aria-hidden': 'true',
+                    focusable: 'false'
+                },
+                el('rect', { x: '4', y: '7.5', width: '16', height: '1.5' }),
+                el('rect', { x: '4', y: '15', width: '16', height: '1.5' })
+            );
         }
 
-        return el(
-            'svg',
-            {
-                className: 'sidemenu-button-icon',
-                xmlns: 'http://www.w3.org/2000/svg',
-                viewBox: '0 0 24 24',
-                width: '1em',
-                height: '1em',
-                'aria-hidden': 'true',
-                focusable: 'false'
-            },
-            el('rect', { x: '4', y: '7.5', width: '16', height: '1.5' }),
-            el('rect', { x: '4', y: '15', width: '16', height: '1.5' })
+        return applyFilters(
+            'sidemenu.openButtonIcon',
+            iconElement,
+            attributes,
+            context || 'save'
         );
     }
 
-    function buttonContents(attributes) {
+    function buttonContents(attributes, context) {
         var icon = attributes.buttonIcon || 'title';
         var title = buttonTitle(attributes);
         var contents = [];
 
         if ('icon' === icon || 'left' === icon) {
-            contents.push(menuIcon(attributes));
+            contents.push(menuIcon(attributes, context));
         }
 
         if ('icon' !== icon) {
@@ -147,7 +160,7 @@
         }
 
         if ('right' === icon) {
-            contents.push(menuIcon(attributes));
+            contents.push(menuIcon(attributes, context));
         }
 
         return contents;
@@ -641,7 +654,7 @@
                         editorButtonPreviewProps(attributes),
                         classicMode
                             ? editorButtonTitle(attributes)
-                            : buttonContents(Object.assign({}, attributes, { title: editorButtonTitle(attributes) }))
+                            : buttonContents(Object.assign({}, attributes, { title: editorButtonTitle(attributes) }), 'editor')
                     )
                 ),
                 el(
