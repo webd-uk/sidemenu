@@ -24,6 +24,9 @@
       "type": "string",
       "default": "menu"
     },
+    "justifyContent": {
+      "type": "string"
+    },
     "style": {
       "type": "object",
       "default": {

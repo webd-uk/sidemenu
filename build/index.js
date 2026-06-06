@@ -2,7 +2,9 @@
     var __ = wp.i18n.__;
     var el = wp.element.createElement;
     var useBlockProps = wp.blockEditor.useBlockProps;
+    var BlockControls = wp.blockEditor.BlockControls;
     var InspectorControls = wp.blockEditor.InspectorControls;
+    var JustifyToolbar = wp.blockEditor.JustifyToolbar;
     var PanelBody = wp.components.PanelBody;
     var ToggleControl = wp.components.ToggleControl;
     var TextControl = wp.components.TextControl;
@@ -176,7 +178,14 @@
     }
 
     function blockClassName(attributes) {
-        return isClassicMode(attributes) ? 'open_sidemenu' : 'sidemenu-block-mode';
+        var justifyContent = attributes.justifyContent;
+
+        return classNames(
+            isClassicMode(attributes) ? 'open_sidemenu' : 'sidemenu-block-mode',
+            !isClassicMode(attributes) && ('center' === justifyContent || 'right' === justifyContent)
+                ? 'is-content-justification-' + justifyContent
+                : ''
+        );
     }
 
     function sidemenuButtonSave(attributes) {
@@ -411,6 +420,9 @@
                 type: 'string',
                 default: 'menu'
             },
+            justifyContent: {
+                type: 'string'
+            },
             style: {
                 type: 'object',
                 default: {
@@ -608,6 +620,19 @@
             return el(
                 wp.element.Fragment,
                 null,
+                !classicMode && el(
+                    BlockControls,
+                    null,
+                    el(JustifyToolbar, {
+                        allowedControls: ['left', 'center', 'right'],
+                        value: attributes.justifyContent || 'left',
+                        onChange: function(justifyContent) {
+                            setAttributes({
+                                justifyContent: !justifyContent || 'left' === justifyContent ? undefined : justifyContent
+                            });
+                        }
+                    })
+                ),
                 el(
                     'div',
                     blockProps,
