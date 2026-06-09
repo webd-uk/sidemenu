@@ -606,15 +606,15 @@
                             value: attributes.buttonIcon || 'title',
                             options: [
                                 { label: __('Title only', 'sidemenu'), value: 'title' },
-                                { label: __('Hamburger icon', 'sidemenu'), value: 'icon' },
-                                { label: __('Hamburger to the left of title', 'sidemenu'), value: 'left' },
-                                { label: __('Hamburger to the right of title', 'sidemenu'), value: 'right' }
+                                { label: __('Icon', 'sidemenu'), value: 'icon' },
+                                { label: __('Icon to the left of title', 'sidemenu'), value: 'left' },
+                                { label: __('Icon to the right of title', 'sidemenu'), value: 'right' }
                             ],
                             onChange: function(buttonIcon) {
                                 setAttributes({ buttonIcon: buttonIcon });
                             }
                         }),
-                        'title' !== (attributes.buttonIcon || 'title') && el(SelectControl, {
+                        !contentData.premiumBlockActive && 'title' !== (attributes.buttonIcon || 'title') && el(SelectControl, {
                             label: __('Hamburger Icon', 'sidemenu'),
                             value: attributes.menuIcon || 'menu',
                             options: [
