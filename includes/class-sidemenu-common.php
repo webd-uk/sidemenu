@@ -21,6 +21,7 @@ if (!class_exists('sidemenuCommon')) {
         public static $plugin_premium_class = 'sidemenu_premium_class';
         public static $plugin_trial = true;
         public static $plugin_upgrade = true;
+        public static $plugin_premium_name = false;
         public static $plugin_product_slug = false;
         public static $plugin_premium_plugin = false;
         public static $plugin_upgrade_products = array();
@@ -40,6 +41,12 @@ if (!class_exists('sidemenuCommon')) {
         public static function plugin_name() {
 
             return self::$plugin_name;
+
+        }
+
+        public static function plugin_premium_name() {
+
+            return self::$plugin_premium_name ? self::$plugin_premium_name : self::$plugin_name . ' Premium';
 
         }
 
@@ -79,6 +86,7 @@ if (!class_exists('sidemenuCommon')) {
                         'premium_class' => self::$plugin_premium_class,
                         'trial' => self::$plugin_trial,
                         'upgrade' => self::$plugin_upgrade,
+                        'premium_name' => self::plugin_premium_name(),
                         'product_slug' => self::$plugin_product_slug ? self::$plugin_product_slug : self::$plugin_text_domain . '-upgrade',
                         'premium_plugin' => self::$plugin_premium_plugin ? self::$plugin_premium_plugin : self::$plugin_text_domain . '-premium/' . self::$plugin_prefix . '-premium.php',
                     ),
@@ -94,6 +102,7 @@ if (!class_exists('sidemenuCommon')) {
                 'premium_class' => self::$plugin_premium_class,
                 'trial' => self::$plugin_trial,
                 'upgrade' => self::$plugin_upgrade,
+                'premium_name' => self::plugin_premium_name(),
                 'product_slug' => self::$plugin_product_slug ? self::$plugin_product_slug : self::$plugin_text_domain . '-upgrade',
                 'premium_plugin' => self::$plugin_premium_plugin ? self::$plugin_premium_plugin : self::$plugin_text_domain . '-premium/' . self::$plugin_prefix . '-premium.php',
             );
@@ -116,6 +125,7 @@ if (!class_exists('sidemenuCommon')) {
                 'plugin_premium_class' => self::$plugin_premium_class,
                 'plugin_trial' => self::$plugin_trial,
                 'plugin_upgrade' => self::$plugin_upgrade,
+                'plugin_premium_name' => self::$plugin_premium_name,
                 'plugin_product_slug' => self::$plugin_product_slug,
                 'plugin_premium_plugin' => self::$plugin_premium_plugin,
             );
@@ -126,6 +136,7 @@ if (!class_exists('sidemenuCommon')) {
             self::$plugin_premium_class = $upgrade_product['premium_class'];
             self::$plugin_trial = $upgrade_product['trial'];
             self::$plugin_upgrade = $upgrade_product['upgrade'];
+            self::$plugin_premium_name = $upgrade_product['premium_name'];
             self::$plugin_product_slug = $upgrade_product['product_slug'];
             self::$plugin_premium_plugin = $upgrade_product['premium_plugin'];
 
@@ -137,6 +148,7 @@ if (!class_exists('sidemenuCommon')) {
             self::$plugin_premium_class = $original['plugin_premium_class'];
             self::$plugin_trial = $original['plugin_trial'];
             self::$plugin_upgrade = $original['plugin_upgrade'];
+            self::$plugin_premium_name = $original['plugin_premium_name'];
             self::$plugin_product_slug = $original['plugin_product_slug'];
             self::$plugin_premium_plugin = $original['plugin_premium_plugin'];
 
@@ -525,8 +537,8 @@ if (!class_exists('sidemenuCommon')) {
 <?php esc_html_e('In order to use the premium features, you need to install the premium version of the plugin ...', 'sidemenu'); ?></p>
 
 <p><a href="<?php
-/* translators: name of the plugin */
-echo esc_url(self::premium_link()); ?>" title="<?php echo esc_attr(sprintf(__('Download %s Premium', 'sidemenu'), self::$plugin_name)); ?>" class="button-primary"><?php printf(esc_html(__('Download %s Premium', 'sidemenu')), esc_html(self::$plugin_name)); ?></a></p>
+/* translators: name of the premium plugin */
+echo esc_url(self::premium_link()); ?>" title="<?php echo esc_attr(sprintf(__('Download %s', 'sidemenu'), self::plugin_premium_name())); ?>" class="button-primary"><?php printf(esc_html(__('Download %s', 'sidemenu')), esc_html(self::plugin_premium_name())); ?></a></p>
 
 </div>
 

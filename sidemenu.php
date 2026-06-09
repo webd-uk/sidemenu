@@ -42,6 +42,7 @@ sidemenuCommon::$plugin_upgrade_products = array(
         'premium_class' => 'sidemenu_block_premium_class',
         'trial' => true,
         'upgrade' => true,
+        'premium_name' => 'SideMenu Block Premium',
         'product_slug' => 'sidemenu-block-upgrade',
         'premium_plugin' => 'sidemenu-block-premium/sidemenu-block-premium.php',
     ),
