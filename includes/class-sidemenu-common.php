@@ -3,13 +3,9 @@
  * Version: 1.4.6
  */
 
-
-
 if (!defined('ABSPATH')) {
     exit('This isn\'t the page you\'re looking for. Move along, move along.');
 }
-
-
 
 if (!class_exists('sidemenuCommon')) {
 
