@@ -112,6 +112,7 @@
             '--sidemenu-block-transition-duration',
             window.getComputedStyle(panel).getPropertyValue('--sidemenu-block-transition-duration') || '0.2s'
         );
+        cover.style.backgroundColor = panel.dataset.sidemenuCoverColor || 'rgba(0, 0, 0, 0.6)';
         cover.hidden = false;
         cover.classList.add('is-open');
         panel.classList.add('is-open');

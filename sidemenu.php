@@ -58,7 +58,6 @@ if (!class_exists('sidemenu_block_class')) {
         const CLASSIC_USAGE_OPTION = 'sidemenu_classic_usage_detected';
         const DEFAULT_CONTENT_OPTION = 'sidemenu_default_content_id';
         const CONTENT_POST_TYPE = 'sidemenu';
-        const POSITION_META_KEY = '_sidemenu_position';
 
         // Per-request block rendering state.
         private $block_content_ids = array();
@@ -180,7 +179,7 @@ if (!class_exists('sidemenu_block_class')) {
             register_block_type(self::plugin_path() . 'build');
             register_post_meta(
                 self::CONTENT_POST_TYPE,
-                self::POSITION_META_KEY,
+                '_sidemenu_position',
                 array(
                     'single' => true,
                     'type' => 'string',
@@ -419,7 +418,7 @@ if (!class_exists('sidemenu_block_class')) {
 
         public static function sidemenu_can_edit_meta($allowed = true, $meta_key = '', $post_id = 0) {
 
-            if (self::POSITION_META_KEY !== $meta_key) {
+            if ('_sidemenu_position' !== $meta_key) {
 
                 return false;
 
@@ -443,7 +442,7 @@ if (!class_exists('sidemenu_block_class')) {
 
         public static function sidemenu_get_panel_position($content_id) {
 
-            return self::sidemenu_sanitize_position(get_post_meta(absint($content_id), self::POSITION_META_KEY, true));
+            return self::sidemenu_sanitize_position(get_post_meta(absint($content_id), '_sidemenu_position', true));
 
         }
 
@@ -788,6 +787,7 @@ if (!class_exists('sidemenu_block_class')) {
                 'autoOpenDelay' => 0,
                 'hideCloseButton' => false,
                 'closeIconSize' => '32px',
+                'coverColor' => 'rgba(0, 0, 0, 0.6)',
             );
 
             return apply_filters('sidemenu_block_panel_settings', $settings, absint($content_id));
@@ -1029,7 +1029,7 @@ if (!class_exists('sidemenu_block_class')) {
             ob_start();
 
 ?><div class="sidemenu-block-panels">
-<section class="sidemenu-block-panel sidemenu-position-<?php echo esc_attr($position); ?>" id="sidemenu-block-panel-<?php echo esc_attr($content_id); ?>" data-sidemenu-panel-id="<?php echo esc_attr($content_id); ?>" data-sidemenu-position="<?php echo esc_attr($position); ?>" data-sidemenu-scroll-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['scrollClose']))); ?>" data-sidemenu-cover-click-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['coverClickClose']))); ?>" data-sidemenu-auto-open="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['autoOpen']))); ?>" data-sidemenu-auto-open-delay="<?php echo esc_attr(absint($settings['autoOpenDelay'])); ?>"<?php echo $panel_style ? ' style="' . esc_attr($panel_style) . '"' : ''; ?> aria-hidden="true">
+<section class="sidemenu-block-panel sidemenu-position-<?php echo esc_attr($position); ?>" id="sidemenu-block-panel-<?php echo esc_attr($content_id); ?>" data-sidemenu-panel-id="<?php echo esc_attr($content_id); ?>" data-sidemenu-position="<?php echo esc_attr($position); ?>" data-sidemenu-scroll-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['scrollClose']))); ?>" data-sidemenu-cover-click-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['coverClickClose']))); ?>" data-sidemenu-auto-open="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['autoOpen']))); ?>" data-sidemenu-auto-open-delay="<?php echo esc_attr(absint($settings['autoOpenDelay'])); ?>" data-sidemenu-cover-color="<?php echo esc_attr($settings['coverColor']); ?>"<?php echo $panel_style ? ' style="' . esc_attr($panel_style) . '"' : ''; ?> aria-hidden="true">
     <?php echo wp_kses($close_button, self::sidemenu_allowed_close_button_html()); ?>
     <div class="sidemenu-block-content"><?php echo wp_kses_post($content); ?></div>
 </section>

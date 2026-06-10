@@ -106,13 +106,13 @@
     position: fixed;
     inset: 0;
     z-index: 999998;
-    background: #000000;
+    background: rgba(0, 0, 0, 0.6);
     opacity: 0;
     transition: opacity var(--sidemenu-block-transition-duration, 0.2s) ease-in-out;
 }
 
 .sidemenu-block-cover.is-open {
-    opacity: 0.6;
+    opacity: 1;
 }
 
 @media screen and (max-width: 782px) {
