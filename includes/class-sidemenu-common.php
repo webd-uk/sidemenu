@@ -375,7 +375,7 @@ if (!class_exists('sidemenuCommon')) {
 
                 if (isset($_SERVER['HTTP_HOST'])) {
 
-                    return add_query_arg('url', (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . filter_var(wp_unslash($_SERVER['HTTP_HOST'], FILTER_SANITIZE_URL)), 'https://webd.uk/product/' . $upgrade_product['product_slug'] . '/');
+                    return add_query_arg('url', (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . filter_var(wp_unslash($_SERVER['HTTP_HOST']), FILTER_SANITIZE_URL), 'https://webd.uk/product/' . $upgrade_product['product_slug'] . '/');
 
                 } else {
 
