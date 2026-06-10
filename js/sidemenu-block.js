@@ -57,6 +57,25 @@
         }
     };
 
+    const preparePanelScrollContainer = function(panel) {
+        const content = panel.querySelector('.sidemenu-block-content');
+        const container = content ? content.firstElementChild : null;
+        const minHeight = container && container.style ? container.style.minHeight : '';
+
+        if (
+            !container ||
+            !container.classList.contains('wp-block-group') ||
+            !minHeight
+        ) {
+            return;
+        }
+
+        container.style.setProperty('--sidemenu-block-content-height', minHeight);
+        container.classList.add('sidemenu-block-scroll-container');
+        content.classList.add('has-scroll-container');
+        panel.classList.add('has-content-scroll-container');
+    };
+
     const closePanel = function(options) {
         const cover = getCover();
         const closeOptions = Object.assign({ restoreFocus: true }, options || {});
@@ -68,7 +87,6 @@
 
         if (cover) {
             cover.classList.remove('is-open');
-            cover.hidden = true;
         }
 
         document.body.classList.remove('sidemenu-block-is-open');
@@ -148,6 +166,7 @@
         document.querySelectorAll(selectors.panel).forEach(function(panel) {
             panel.setAttribute('role', 'dialog');
             panel.setAttribute('aria-modal', 'true');
+            preparePanelScrollContainer(panel);
             preparePanelCloseColor(panel);
         });
     };

@@ -41,7 +41,9 @@
     overflow-x: hidden;
     overflow-y: auto;
     transform: translateX(100%);
-    transition: transform var(--sidemenu-block-transition-duration, 0.2s) ease-in-out;
+    transition:
+        transform var(--sidemenu-block-transition-duration, 0.2s) ease-in-out,
+        visibility 0s linear var(--sidemenu-block-transition-duration, 0.2s);
     visibility: hidden;
 }
 
@@ -58,6 +60,7 @@
 
 .sidemenu-block-panel.is-open {
     transform: translateX(0);
+    transition-delay: 0s;
     visibility: visible;
 }
 
@@ -102,17 +105,44 @@
     min-height: 100%;
 }
 
+.sidemenu-block-panel.has-content-scroll-container {
+    overflow-y: hidden;
+}
+
+.sidemenu-block-content.has-scroll-container {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.sidemenu-block-content > .sidemenu-block-scroll-container {
+    box-sizing: border-box;
+    height: var(--sidemenu-block-content-height);
+    min-height: 0 !important;
+    max-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
 .sidemenu-block-cover {
     position: fixed;
     inset: 0;
     z-index: 999998;
     background: rgba(0, 0, 0, 0.6);
     opacity: 0;
-    transition: opacity var(--sidemenu-block-transition-duration, 0.2s) ease-in-out;
+    pointer-events: none;
+    transition:
+        opacity var(--sidemenu-block-transition-duration, 0.2s) ease-in-out,
+        visibility 0s linear var(--sidemenu-block-transition-duration, 0.2s);
+    visibility: hidden;
 }
 
 .sidemenu-block-cover.is-open {
     opacity: 1;
+    pointer-events: auto;
+    transition-delay: 0s;
+    visibility: visible;
 }
 
 @media screen and (max-width: 782px) {
