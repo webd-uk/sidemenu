@@ -64,13 +64,12 @@
 
         if (
             !container ||
-            !container.classList.contains('wp-block-group') ||
-            !minHeight
+            !container.classList.contains('wp-block-group')
         ) {
             return;
         }
 
-        container.style.setProperty('--sidemenu-block-content-height', minHeight);
+        container.style.setProperty('--sidemenu-block-content-height', minHeight || '100%');
         container.classList.add('sidemenu-block-scroll-container');
         content.classList.add('has-scroll-container');
         panel.classList.add('has-content-scroll-container');
