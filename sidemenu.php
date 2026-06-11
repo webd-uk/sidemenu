@@ -99,6 +99,7 @@ if (!class_exists('sidemenu_block_class')) {
             add_action('trashed_post', array($this, 'sidemenu_refresh_classic_usage_option_after_post_change'));
             add_action('untrashed_post', array($this, 'sidemenu_refresh_classic_usage_option_after_post_change'));
             add_action('switch_theme', array($this, 'sidemenu_refresh_classic_usage_option_after_post_change'));
+            add_action('wp_update_nav_menu', array($this, 'sidemenu_refresh_classic_usage_option'));
 
             // Refresh classic runtime detection when block widget content changes.
             add_action('updated_option', array($this, 'sidemenu_refresh_classic_usage_option_after_option_change'), 10, 1);
@@ -1242,12 +1243,6 @@ if (!class_exists('sidemenu_block_class')) {
 
             }
 
-            if (function_exists('has_shortcode')) {
-
-                return has_shortcode($content, 'sidemenu');
-
-            }
-
             return (bool) preg_match('/\[sidemenu(?:[\s\]\/])/', $content);
 
         }
@@ -1350,37 +1345,64 @@ if (!class_exists('sidemenu_block_class')) {
 
         }
 
-        public static function sidemenu_widget_option_can_affect_classic_usage($option) {
-
-            return 'sidebars_widgets' === $option || 'widget_block' === $option;
-
-        }
-
         public static function sidemenu_detect_classic_usage() {
 
-            return self::sidemenu_theme_has_classic_usage() || self::sidemenu_published_content_has_classic_triggers() || self::sidemenu_widgets_have_classic_usage();
+            return (
+                self::sidemenu_theme_has_classic_usage() ||
+                self::sidemenu_nav_menus_have_classic_triggers() ||
+                self::sidemenu_published_content_has_classic_triggers() ||
+                self::sidemenu_widgets_have_classic_usage()
+            );
 
         }
 
         public static function sidemenu_theme_has_classic_usage() {
 
-            if (get_theme_mod('sidemenu_hijack_toggle')) {
+            return (bool) get_theme_mod('sidemenu_hijack_toggle');
 
-                return true;
+        }
+
+        public static function sidemenu_nav_menus_have_classic_triggers() {
+
+            $menu_locations = get_nav_menu_locations();
+
+            if (!is_array($menu_locations)) {
+
+                return false;
 
             }
 
-            $sidebars_widgets = get_option('sidebars_widgets', array());
+            foreach ($menu_locations as $location => $menu_id) {
 
-            if (is_array($sidebars_widgets) && !empty($sidebars_widgets['sidemenu'])) {
+                if ('sidemenu' === $location || !$menu_id) {
 
-                return true;
+                    continue;
+
+                }
+
+                $menu_items = wp_get_nav_menu_items($menu_id);
+
+                if (!is_array($menu_items)) {
+
+                    continue;
+
+                }
+
+                foreach ($menu_items as $menu_item) {
+
+                    $classes = isset($menu_item->classes) && is_array($menu_item->classes) ? $menu_item->classes : array();
+
+                    if (in_array('open_sidemenu', $classes, true)) {
+
+                        return true;
+
+                    }
+
+                }
 
             }
 
-            $nav_menu_locations = get_nav_menu_locations();
-
-            return is_array($nav_menu_locations) && !empty($nav_menu_locations['sidemenu']);
+            return false;
 
         }
 
@@ -1534,7 +1556,10 @@ if (!class_exists('sidemenu_block_class')) {
 
             }
 
-            if (self::sidemenu_widget_option_can_affect_classic_usage($option)) {
+            if (
+                in_array($option, array('sidebars_widgets', 'widget_block'), true) ||
+                0 === strpos($option, 'theme_mods_')
+            ) {
 
                 self::sidemenu_refresh_classic_usage_option();
 
