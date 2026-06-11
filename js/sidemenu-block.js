@@ -75,6 +75,16 @@
         panel.classList.add('has-content-scroll-container');
     };
 
+    const triggerCanReceiveFocus = function(trigger) {
+        if (!trigger || trigger.closest('[hidden]')) {
+            return false;
+        }
+
+        const style = window.getComputedStyle(trigger);
+
+        return 'none' !== style.display && 'hidden' !== style.visibility;
+    };
+
     const closePanel = function(options) {
         const cover = getCover();
         const closeOptions = Object.assign({ restoreFocus: true }, options || {});
@@ -94,7 +104,7 @@
             lastTrigger.classList.remove('is-open');
             lastTrigger.setAttribute('aria-expanded', 'false');
 
-            if (closeOptions.restoreFocus) {
+            if (closeOptions.restoreFocus && triggerCanReceiveFocus(lastTrigger)) {
                 try {
                     lastTrigger.focus({ preventScroll: true });
                 } catch (error) {
