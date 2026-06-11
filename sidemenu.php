@@ -564,6 +564,9 @@ if (!class_exists('sidemenu_block_class')) {
         public function sidemenu_enqueue_block_editor_assets() {
 
             $can_create_content = self::sidemenu_can_create_content_posts();
+            $premium_trial_date = absint(get_option('sidemenu_block_trial_date'));
+            $premium_purchased = (bool) get_option('sidemenu_block_purchased');
+            $premium_trial_active = $premium_trial_date && time() < strtotime('+1 week', $premium_trial_date);
             $data = array(
                 'contentPosts' => self::sidemenu_get_content_posts(),
                 'defaultContentId' => self::sidemenu_get_default_content_id(),
@@ -574,6 +577,11 @@ if (!class_exists('sidemenu_block_class')) {
                 'classicCustomizerAvailable' => self::sidemenu_should_load_classic_runtime(),
                 'restNamespace' => 'sidemenu/v1',
                 'premiumBlockActive' => false,
+                'premiumTrialAvailable' => !$premium_purchased && (!$premium_trial_date || $premium_trial_active),
+                'premiumTrialStarted' => (bool) $premium_trial_date,
+                'premiumPurchased' => $premium_purchased,
+                'premiumDownloadUrl' => sidemenuCommon::premium_link('block'),
+                'premiumUpgradeUrl' => sidemenuCommon::upgrade_link('block'),
             );
 
             wp_add_inline_script(

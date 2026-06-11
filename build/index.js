@@ -36,7 +36,12 @@
             customizeUrl: '',
             classicCustomizerAvailable: false,
             restNamespace: 'sidemenu/v1',
-            premiumBlockActive: false
+            premiumBlockActive: false,
+            premiumTrialAvailable: true,
+            premiumTrialStarted: false,
+            premiumPurchased: false,
+            premiumDownloadUrl: '',
+            premiumUpgradeUrl: ''
         };
     }
 
@@ -355,6 +360,48 @@
 	        });
 	    }
 
+        function premiumUpgradeContent(description) {
+            var premiumData = sideMenuBlockData();
+            var actions = [];
+
+            if (premiumData.premiumPurchased) {
+                actions.push(el(Button, {
+                    key: 'download',
+                    variant: 'primary',
+                    href: premiumData.premiumDownloadUrl
+                }, __('Download Premium', 'sidemenu')));
+            } else {
+                if (premiumData.premiumTrialAvailable) {
+                    actions.push(el(Button, {
+                        key: 'trial',
+                        variant: 'secondary',
+                        href: premiumData.premiumDownloadUrl
+                    }, premiumData.premiumTrialStarted
+                        ? __('Continue free trial', 'sidemenu')
+                        : __('Try free for 7 days', 'sidemenu')));
+                }
+
+                actions.push(el(Button, {
+                    key: 'upgrade',
+                    variant: 'primary',
+                    href: premiumData.premiumUpgradeUrl
+                }, __('Upgrade', 'sidemenu')));
+            }
+
+            return el(
+                'div',
+                null,
+                el('p', null, description),
+                el('div', {
+                    style: {
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '8px'
+                    }
+                }, actions)
+            );
+        }
+
 	    function SideMenuContentSettingsPanel() {
 	        var postType = data.useSelect(function(select) {
 	            var editor = select('core/editor');
@@ -374,27 +421,42 @@
 	        }
 
 	        return el(
-	            PluginDocumentSettingPanel,
-	            {
-	                name: 'sidemenu-panel-settings',
-	                title: __('SideMenu Settings', 'sidemenu'),
-	                initialOpen: true
-	            },
-	            el(SelectControl, {
-	                label: __('Position', 'sidemenu'),
-	                value: position,
-	                options: [
-	                    { label: __('Right', 'sidemenu'), value: 'right' },
-	                    { label: __('Left', 'sidemenu'), value: 'left' }
-	                ],
-	                onChange: function(value) {
-	                    var nextMeta = Object.assign({}, meta);
+                wp.element.Fragment,
+                null,
+                el(
+                    PluginDocumentSettingPanel,
+                    {
+                        name: 'sidemenu-panel-settings',
+                        title: __('SideMenu Settings', 'sidemenu'),
+                        initialOpen: true
+                    },
+                    el(SelectControl, {
+                        label: __('Position', 'sidemenu'),
+                        value: position,
+                        options: [
+                            { label: __('Right', 'sidemenu'), value: 'right' },
+                            { label: __('Left', 'sidemenu'), value: 'left' }
+                        ],
+                        onChange: function(value) {
+                            var nextMeta = Object.assign({}, meta);
 
-	                    nextMeta._sidemenu_position = value;
-	                    editorDispatch.editPost({ meta: nextMeta });
-	                }
-	            })
-	        );
+                            nextMeta._sidemenu_position = value;
+                            editorDispatch.editPost({ meta: nextMeta });
+                        }
+                    })
+                ),
+                !sideMenuBlockData().premiumBlockActive && el(
+                    PluginDocumentSettingPanel,
+                    {
+                        name: 'sidemenu-premium-settings',
+                        title: __('SideMenu Premium Settings', 'sidemenu'),
+                        initialOpen: true
+                    },
+                    premiumUpgradeContent(
+                        __('Customize the cover color and opacity, opening speed, desktop width, close behavior, auto-open settings, and the close button icon.', 'sidemenu')
+                    )
+                )
+            );
 	    }
 
 	    if (registerPlugin && PluginDocumentSettingPanel && data && data.useSelect && data.useDispatch) {
@@ -664,6 +726,13 @@
                         PanelBody,
                         { title: __('SideMenu Open Button', 'sidemenu'), initialOpen: true },
                         panelControls
+                    ),
+                    !classicMode && !contentData.premiumBlockActive && el(
+                        PanelBody,
+                        { title: __('SideMenu Premium Settings', 'sidemenu'), initialOpen: true },
+                        premiumUpgradeContent(
+                            __('Choose different SideMenu content for each button, use additional WordPress Dashicon SVG icons, and hide buttons for auto-open SideMenus.', 'sidemenu')
+                        )
                     )
                 )
             );
