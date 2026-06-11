@@ -108,9 +108,17 @@
     transform: none;
 }
 
-.sidemenu-block-close:focus-visible {
-    outline: 2px solid currentColor;
-    outline-offset: -0.5rem;
+.sidemenu-block-close:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.sidemenu-block-close:focus::after {
+    content: "";
+    position: absolute;
+    inset: 0.5rem;
+    border: 2px solid currentColor;
+    pointer-events: none;
 }
 
 .sidemenu-block-content {
