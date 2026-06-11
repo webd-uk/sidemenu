@@ -3,6 +3,10 @@
     justify-content: flex-start;
 }
 
+.wp-block-sidemenu-sidemenu.sidemenu-block-mode[hidden] {
+    display: none;
+}
+
 .wp-block-sidemenu-sidemenu.sidemenu-block-mode.is-content-justification-center {
     justify-content: center;
 }
