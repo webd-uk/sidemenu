@@ -11,6 +11,7 @@
     let activePanel = null;
     let lastTrigger = null;
     let currentScroll = 0;
+    const openedPanels = new WeakSet();
 
     const labels = window.sideMenuBlockFrontend || {};
 
@@ -134,6 +135,7 @@
         activePanel = panel;
         lastTrigger = trigger;
         currentScroll = window.pageYOffset || document.documentElement.scrollTop || 0;
+        openedPanels.add(panel);
 
         cover.style.setProperty(
             '--sidemenu-block-transition-duration',
@@ -244,7 +246,7 @@
             window.setTimeout(function() {
                 const trigger = document.querySelector(`.wp-block-sidemenu-sidemenu.sidemenu-block-mode[data-sidemenu-content-id="${panelId}"] a`);
 
-                if (trigger && !activePanel) {
+                if (trigger && !activePanel && !openedPanels.has(panel)) {
                     openPanel(trigger);
                 }
             }, delay);
