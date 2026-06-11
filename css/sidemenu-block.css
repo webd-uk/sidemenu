@@ -100,6 +100,14 @@
     transform: rotate(180deg);
 }
 
+.sidemenu-block-close-no-animation .sidemenu-block-close-icon {
+    transition: none;
+}
+
+.sidemenu-block-close-no-animation:hover .sidemenu-block-close-icon {
+    transform: none;
+}
+
 .sidemenu-block-close:focus-visible {
     outline: 2px solid currentColor;
     outline-offset: -0.5rem;

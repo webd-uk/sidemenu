@@ -787,6 +787,7 @@ if (!class_exists('sidemenu_block_class')) {
                 'autoOpen' => false,
                 'autoOpenDelay' => 0,
                 'hideCloseButton' => false,
+                'closeIconAnimation' => true,
                 'closeIconSize' => '32px',
                 'coverColor' => 'rgba(0, 0, 0, 0.6)',
             );
@@ -851,7 +852,15 @@ if (!class_exists('sidemenu_block_class')) {
 
             }
 
-            $close_html = '<button type="button" class="sidemenu-block-close" aria-label="' . esc_attr__('Close menu', 'sidemenu') . '">' . self::sidemenu_close_icon_svg($content_id, $settings) . '</button>';
+            $close_class = 'sidemenu-block-close';
+
+            if (isset($settings['closeIconAnimation']) && !$settings['closeIconAnimation']) {
+
+                $close_class .= ' sidemenu-block-close-no-animation';
+
+            }
+
+            $close_html = '<button type="button" class="' . esc_attr($close_class) . '" aria-label="' . esc_attr__('Close menu', 'sidemenu') . '">' . self::sidemenu_close_icon_svg($content_id, $settings) . '</button>';
 
             return apply_filters('sidemenu_block_close_button_html', $close_html, absint($content_id), $settings);
 
