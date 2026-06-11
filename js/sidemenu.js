@@ -7,6 +7,7 @@ var sidemenuJS = function() {
         document.body.insertBefore(document.getElementsByClassName('sidemenu')[0], document.body.firstChild);
         var sidemenuCover = document.createElement('section'),
         sidemenuToggles = document.querySelectorAll('.open_sidemenu:not(.sidemenu-block-mode)>a, .open_sidemenu:not(.sidemenu-block-mode)>div>a'),
+        sidemenuBlockToggles = document.querySelectorAll('.sidemenu-block-mode'),
         sidemenuHiddenButtonWrapper = document.createElement('span'),
         sidemenuHiddenButton = document.createElement('a');
         sidemenuCover.className = 'cover';
@@ -70,7 +71,7 @@ var sidemenuJS = function() {
         if (!('contentclickclose' in sideMenu) || ('contentclickclose' in sideMenu && sideMenu.contentclickclose == '1')) {
             document.querySelectorAll('body>.cover')[0].addEventListener('click', coverClick, false);
         }
-        if (!('hidetooltips' in sideMenu) && !sidemenuToggles.length && document.body.classList.contains('logged-in') && ('openbuttonhelp' in sideMenu)) {
+        if (!('hidetooltips' in sideMenu) && !sidemenuToggles.length && !sidemenuBlockToggles.length && document.body.classList.contains('logged-in') && ('openbuttonhelp' in sideMenu)) {
             var sidemenuHelp = document.createElement('section');
             sidemenuHelp.innerHTML = sideMenu.openbuttonhelp;
             document.getElementsByClassName('close_sidemenu')[0].parentNode.insertBefore(sidemenuHelp, document.getElementsByClassName('close_sidemenu')[0].nextSibling);

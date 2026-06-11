@@ -104,7 +104,7 @@ For classic themes and existing classic SideMenu usage, settings are available i
 
 = Why can I not see the classic Customizer settings on my block theme? =
 
-On block themes, SideMenu only loads the classic Customizer settings when classic usage is detected. Add and save a classic SideMenu block, shortcode, `open_sidemenu` link, SideMenu widget, SideMenu menu location or mobile menu hijack setting if your site still needs the classic runtime.
+On block themes, SideMenu only loads the classic Customizer settings when a classic trigger is detected. Add and save a classic SideMenu block, shortcode or `open_sidemenu` trigger in published content, an active widget area or an assigned classic navigation menu, or enable the mobile menu hijack setting if your site still needs the classic runtime.
 
 = Can different buttons open different SideMenu content? =
 

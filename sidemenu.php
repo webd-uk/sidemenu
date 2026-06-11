@@ -1087,7 +1087,7 @@ if (!class_exists('sidemenu_block_class')) {
 
         }
 
-        public static function sidemenu_block_is_classic($block) {
+        public static function sidemenu_block_has_classic_trigger($block) {
 
             if (!is_array($block)) {
 
@@ -1095,25 +1095,40 @@ if (!class_exists('sidemenu_block_class')) {
 
             }
 
-            if (
-                isset($block['blockName']) &&
-                'sidemenu/sidemenu' === $block['blockName']
-            ) {
+            $block_name = isset($block['blockName']) ? $block['blockName'] : null;
+            $attrs = isset($block['attrs']) && is_array($block['attrs']) ? $block['attrs'] : array();
 
-                $attrs = isset($block['attrs']) && is_array($block['attrs']) ? $block['attrs'] : array();
+            if ('sidemenu/sidemenu' === $block_name) {
 
                 return !isset($attrs['mode']) || 'classic' === $attrs['mode'];
 
             }
 
             if (
-                isset($block['innerBlocks']) &&
-                is_array($block['innerBlocks'])
+                !(
+                    'core/button' === $block_name &&
+                    !empty($attrs['sidemenuOpenButton'])
+                )
             ) {
+
+                $inner_html = isset($block['innerHTML']) && is_string($block['innerHTML']) ? $block['innerHTML'] : '';
+
+                if (
+                    self::sidemenu_content_has_classic_open_button($inner_html) ||
+                    self::sidemenu_content_has_classic_shortcode($inner_html)
+                ) {
+
+                    return true;
+
+                }
+
+            }
+
+            if (isset($block['innerBlocks']) && is_array($block['innerBlocks'])) {
 
                 foreach ($block['innerBlocks'] as $inner_block) {
 
-                    if (self::sidemenu_block_is_classic($inner_block)) {
+                    if (self::sidemenu_block_has_classic_trigger($inner_block)) {
 
                         return true;
 
@@ -1142,27 +1157,14 @@ if (!class_exists('sidemenu_block_class')) {
 
             }
 
-            if (self::sidemenu_content_has_classic_open_button($content)) {
-
-                return true;
-
-            }
-
-            if (self::sidemenu_content_has_classic_shortcode($content)) {
-
-                return true;
-
-            }
-
-            if (false === strpos($content, 'wp:sidemenu/sidemenu')) {
-
-                return false;
-
-            }
-
             if (!function_exists('parse_blocks')) {
 
-                return false !== strpos($content, '<!-- wp:sidemenu/sidemenu -->') || false !== strpos($content, '"mode":"classic"');
+                return (
+                    self::sidemenu_content_has_classic_open_button($content) ||
+                    self::sidemenu_content_has_classic_shortcode($content) ||
+                    false !== strpos($content, '<!-- wp:sidemenu/sidemenu -->') ||
+                    false !== strpos($content, '"mode":"classic"')
+                );
 
             }
 
@@ -1170,7 +1172,7 @@ if (!class_exists('sidemenu_block_class')) {
 
             foreach ($blocks as $block) {
 
-                if (self::sidemenu_block_is_classic($block)) {
+                if (self::sidemenu_block_has_classic_trigger($block)) {
 
                     return true;
 
@@ -1418,7 +1420,17 @@ if (!class_exists('sidemenu_block_class')) {
 
             $refreshing = true;
 
-            update_option(self::CLASSIC_USAGE_OPTION, (bool) self::sidemenu_detect_classic_usage(), false);
+            $has_classic_usage = (bool) self::sidemenu_detect_classic_usage();
+
+            if (null === get_option(self::CLASSIC_USAGE_OPTION, null)) {
+
+                add_option(self::CLASSIC_USAGE_OPTION, $has_classic_usage, '', false);
+
+            } else {
+
+                update_option(self::CLASSIC_USAGE_OPTION, $has_classic_usage, false);
+
+            }
 
             $refreshing = false;
 
