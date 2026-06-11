@@ -145,10 +145,18 @@
     visibility: visible;
 }
 
+.admin-bar .sidemenu-block-cover {
+    top: 32px;
+}
+
 @media screen and (max-width: 782px) {
     .admin-bar .sidemenu-block-panel {
         top: 46px;
         --sidemenu-block-panel-height: calc(100vh - 46px);
+    }
+
+    .admin-bar .sidemenu-block-cover {
+        top: 46px;
     }
 }
 

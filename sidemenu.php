@@ -362,6 +362,7 @@ if (!class_exists('sidemenu_block_class')) {
                 array(
                     'core/group',
                     array(
+                        'align' => 'full',
                         'style' => array(
                             'color' => array(
                                 'background' => '#666666',
@@ -387,7 +388,7 @@ if (!class_exists('sidemenu_block_class')) {
                             ),
                         ),
                         'layout' => array(
-                            'type' => 'constrained',
+                            'type' => 'default',
                         ),
                     ),
                     $example_blocks
