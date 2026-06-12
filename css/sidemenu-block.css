@@ -38,6 +38,7 @@
     bottom: auto;
     z-index: 999999;
     --sidemenu-block-panel-height: 100vh;
+    --sidemenu-block-panel-height: 100dvh;
     width: var(--sidemenu-block-mobile-width, 100%);
     min-width: var(--sidemenu-block-mobile-min-width, 0);
     height: var(--sidemenu-block-panel-custom-height, var(--sidemenu-block-panel-height, 100vh));
@@ -60,6 +61,7 @@
 .admin-bar .sidemenu-block-panel {
     top: 32px;
     --sidemenu-block-panel-height: calc(100vh - 32px);
+    --sidemenu-block-panel-height: calc(100dvh - 32px);
 }
 
 .sidemenu-block-panel.is-open {
@@ -173,6 +175,7 @@
     .admin-bar .sidemenu-block-panel {
         top: 46px;
         --sidemenu-block-panel-height: calc(100vh - 46px);
+        --sidemenu-block-panel-height: calc(100dvh - 46px);
     }
 
     .admin-bar .sidemenu-block-cover {

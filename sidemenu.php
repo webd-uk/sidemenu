@@ -61,7 +61,7 @@ if (!class_exists('sidemenu_block_class')) {
 
         // Per-request block rendering state.
         private $block_content_ids = array();
-        private $block_cover_rendered = false;
+        private $block_panels = array();
         private $rendering_sidemenu_content = false;
 
         public function init() {
@@ -92,6 +92,7 @@ if (!class_exists('sidemenu_block_class')) {
 
             // Detect block-mode buttons and render their SideMenu content.
             add_filter('render_block', array($this, 'sidemenu_render_block'), 10, 2);
+            add_action('wp_footer', array($this, 'sidemenu_output_block_panels'));
 
             // Refresh classic runtime detection when post content changes.
             add_action('wp_after_insert_post', array($this, 'sidemenu_refresh_classic_usage_option_after_insert_post'), 10, 4);
@@ -982,8 +983,9 @@ if (!class_exists('sidemenu_block_class')) {
             self::sidemenu_enqueue_block_frontend_assets();
             $block_content = self::sidemenu_add_block_data_attribute($block_content, $content_id);
             $block_content = apply_filters('sidemenu_block_open_button_html', $block_content, $attributes, $content_id);
+            $this->sidemenu_render_block_panel($content_id);
 
-            return $block_content . $this->sidemenu_render_block_panel($content_id);
+            return $block_content;
 
         }
 
@@ -1036,30 +1038,41 @@ if (!class_exists('sidemenu_block_class')) {
             $settings = self::sidemenu_get_panel_settings($content_id);
             $panel_style = self::sidemenu_panel_style($settings);
             $close_button = self::sidemenu_block_close_button_html($content_id, $settings);
-            $cover = '';
-
-            if (!$this->block_cover_rendered) {
-
-                $this->block_cover_rendered = true;
-                $cover = '<div class="sidemenu-block-cover" hidden></div>';
-
-            }
 
             ob_start();
 
-?><div class="sidemenu-block-panels">
-<section class="sidemenu-block-panel sidemenu-position-<?php echo esc_attr($position); ?>" id="sidemenu-block-panel-<?php echo esc_attr($content_id); ?>" data-sidemenu-panel-id="<?php echo esc_attr($content_id); ?>" data-sidemenu-position="<?php echo esc_attr($position); ?>" data-sidemenu-scroll-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['scrollClose']))); ?>" data-sidemenu-cover-click-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['coverClickClose']))); ?>" data-sidemenu-auto-open="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['autoOpen']))); ?>" data-sidemenu-auto-open-delay="<?php echo esc_attr(absint($settings['autoOpenDelay'])); ?>" data-sidemenu-cover-color="<?php echo esc_attr($settings['coverColor']); ?>"<?php echo $panel_style ? ' style="' . esc_attr($panel_style) . '"' : ''; ?> aria-hidden="true">
+?><section class="sidemenu-block-panel sidemenu-position-<?php echo esc_attr($position); ?>" id="sidemenu-block-panel-<?php echo esc_attr($content_id); ?>" data-sidemenu-panel-id="<?php echo esc_attr($content_id); ?>" data-sidemenu-position="<?php echo esc_attr($position); ?>" data-sidemenu-scroll-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['scrollClose']))); ?>" data-sidemenu-cover-click-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['coverClickClose']))); ?>" data-sidemenu-auto-open="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['autoOpen']))); ?>" data-sidemenu-auto-open-delay="<?php echo esc_attr(absint($settings['autoOpenDelay'])); ?>" data-sidemenu-cover-color="<?php echo esc_attr($settings['coverColor']); ?>"<?php echo $panel_style ? ' style="' . esc_attr($panel_style) . '"' : ''; ?> aria-hidden="true">
     <?php echo wp_kses($close_button, self::sidemenu_allowed_close_button_html()); ?>
     <div class="sidemenu-block-content"><?php
         // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Content has passed through WordPress's standard the_content pipeline.
         echo $content;
     ?></div>
-</section>
-</div><?php
+</section><?php
 
-            echo wp_kses($cover, array('div' => array('class' => true, 'hidden' => true)));
+            $this->block_panels[$content_id] = ob_get_clean();
 
-            return ob_get_clean();
+            return '';
+
+        }
+
+        public function sidemenu_output_block_panels() {
+
+            if (!$this->block_panels) {
+
+                return;
+
+            }
+
+?><div class="sidemenu-block-panels">
+<?php
+            foreach ($this->block_panels as $panel) {
+
+                // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Panel markup is generated and escaped by sidemenu_render_block_panel().
+                echo $panel;
+
+            }
+?></div>
+<div class="sidemenu-block-cover" hidden></div><?php
 
         }
 
