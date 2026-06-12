@@ -540,8 +540,14 @@
             dimensions: {
                 minHeight: true
             },
-            border: {
+            __experimentalBorder: {
                 __experimentalSkipSerialization: true,
+                __experimentalDefaultControls: {
+                    color: true,
+                    radius: true,
+                    style: true,
+                    width: true
+                },
                 color: true,
                 radius: true,
                 style: true,
@@ -795,8 +801,14 @@
                     dimensions: {
                         minHeight: true
                     },
-                    border: {
+                    __experimentalBorder: {
                         __experimentalSkipSerialization: true,
+                        __experimentalDefaultControls: {
+                            color: true,
+                            radius: true,
+                            style: true,
+                            width: true
+                        },
                         color: true,
                         radius: true,
                         style: true,
