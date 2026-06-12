@@ -16,38 +16,6 @@ if (!defined('ABSPATH')) {
     exit('This isn\'t the page you\'re looking for. Move along, move along.');
 }
 
-
-if (!class_exists('sidemenuCommon')) {
-
-    require_once(dirname(__FILE__) . '/includes/class-sidemenu-common.php');
-
-}
-
-// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- Shared helper property name is kept for upgrade-helper compatibility.
-sidemenuCommon::$plugin_upgrade_products = array(
-    'classic' => array(
-        'name' => 'SideMenu',
-        'prefix' => 'sidemenu',
-        'text_domain' => 'sidemenu',
-        'premium_class' => 'sidemenu_premium_class',
-        'trial' => true,
-        'upgrade' => true,
-        'product_slug' => 'sidemenu-upgrade',
-        'premium_plugin' => 'sidemenu-premium/sidemenu-premium.php',
-    ),
-    'block' => array(
-        'name' => 'SideMenu',
-        'prefix' => 'sidemenu_block',
-        'text_domain' => 'sidemenu',
-        'premium_class' => 'sidemenu_block_premium_class',
-        'trial' => true,
-        'upgrade' => true,
-        'premium_name' => 'SideMenu Block Premium',
-        'product_slug' => 'sidemenu-block-upgrade',
-        'premium_plugin' => 'sidemenu-block-premium/sidemenu-block-premium.php',
-    ),
-);
-
 if (!class_exists('sidemenu_block_class')) {
 
     class sidemenu_block_class {
@@ -1591,6 +1559,37 @@ if (!class_exists('sidemenu_block_class')) {
             }
 
         }
+
+    }
+
+    if (!class_exists('sidemenuCommon')) {
+
+        require_once(dirname(__FILE__) . '/includes/class-sidemenu-common.php');
+
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- Shared helper property name is kept for upgrade-helper compatibility.
+        sidemenuCommon::$plugin_upgrade_products = array(
+            'classic' => array(
+                'name' => 'SideMenu',
+                'prefix' => 'sidemenu',
+                'text_domain' => 'sidemenu',
+                'premium_class' => 'sidemenu_premium_class',
+                'trial' => true,
+                'upgrade' => true,
+                'product_slug' => 'sidemenu-upgrade',
+                'premium_plugin' => 'sidemenu-premium/sidemenu-premium.php',
+            ),
+            'block' => array(
+                'name' => 'SideMenu',
+                'prefix' => 'sidemenu_block',
+                'text_domain' => 'sidemenu',
+                'premium_class' => 'sidemenu_block_premium_class',
+                'trial' => true,
+                'upgrade' => true,
+                'premium_name' => 'SideMenu Block Premium',
+                'product_slug' => 'sidemenu-block-upgrade',
+                'premium_plugin' => 'sidemenu-block-premium/sidemenu-block-premium.php',
+            ),
+        );
 
     }
 
