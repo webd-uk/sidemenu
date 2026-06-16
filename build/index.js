@@ -427,7 +427,7 @@
                     PluginDocumentSettingPanel,
                     {
                         name: 'sidemenu-panel-settings',
-                        title: __('SideMenu Settings', 'sidemenu'),
+                        title: __('SideMenu Block', 'sidemenu'),
                         initialOpen: true
                     },
                     el(SelectControl, {
@@ -449,7 +449,7 @@
                     PluginDocumentSettingPanel,
                     {
                         name: 'sidemenu-premium-settings',
-                        title: __('SideMenu Premium Settings', 'sidemenu'),
+                        title: __('SideMenu Block Premium', 'sidemenu'),
                         initialOpen: true
                     },
                     premiumUpgradeContent(
@@ -725,7 +725,7 @@
                     ),
                     !classicMode && !contentData.premiumBlockActive && el(
                         PanelBody,
-                        { title: __('SideMenu Premium Settings', 'sidemenu'), initialOpen: true },
+                        { title: __('SideMenu Block Premium', 'sidemenu'), initialOpen: true },
                         premiumUpgradeContent(
                             __('Choose different SideMenu content for each button, use additional WordPress Dashicon SVG icons, and hide buttons for auto-open SideMenus.', 'sidemenu')
                         )
