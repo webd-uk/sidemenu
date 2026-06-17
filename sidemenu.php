@@ -2,7 +2,7 @@
 /*
  * Plugin Name: SideMenu
  * Version: 2.0
- * Plugin URI: https://webd.uk/product/sidemenu-upgrade/
+ * Plugin URI: https://webd.uk/product/sidemenu-block-upgrade/
  * Description: Adds a customizable sliding side menu to your WordPress site.
  * Author: Webd Ltd
  * Author URI: https://webd.uk
