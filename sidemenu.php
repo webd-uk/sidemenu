@@ -417,6 +417,35 @@ if (!class_exists('sidemenu_block_class')) {
 
         }
 
+        public static function sidemenu_is_saved_legacy_page_content_id($content_id) {
+
+            $content_id = absint($content_id);
+            $default_content_id = absint(get_option(self::DEFAULT_CONTENT_OPTION));
+
+            return (
+                $content_id &&
+                $default_content_id === $content_id &&
+                'page' === get_post_type($content_id) &&
+                'publish' === get_post_status($content_id)
+            );
+
+        }
+
+        public static function sidemenu_is_valid_content_post_id($content_id) {
+
+            $content_id = absint($content_id);
+
+            return (
+                $content_id &&
+                (
+                    self::CONTENT_POST_TYPE === get_post_type($content_id) ||
+                    self::sidemenu_is_saved_legacy_page_content_id($content_id)
+                ) &&
+                'publish' === get_post_status($content_id)
+            );
+
+        }
+
         public static function sidemenu_get_content_posts() {
 
             $posts = get_posts(
@@ -430,15 +459,40 @@ if (!class_exists('sidemenu_block_class')) {
             );
 
             $content_posts = array();
+            $content_post_ids = array();
 
             foreach ($posts as $post) {
 
+                $content_post_ids[] = absint($post->ID);
                 $content_posts[] = array(
                     'id' => absint($post->ID),
                     /* translators: %d: SideMenu content post ID. */
                     'title' => $post->post_title ? $post->post_title : sprintf(__('SideMenu #%d', 'sidemenu'), absint($post->ID)),
                     'editLink' => current_user_can('edit_post', $post->ID) ? get_edit_post_link($post->ID, '') : '',
                 );
+
+            }
+
+            $default_content_id = absint(get_option(self::DEFAULT_CONTENT_OPTION));
+
+            if (
+                $default_content_id &&
+                !in_array($default_content_id, $content_post_ids, true) &&
+                self::sidemenu_is_valid_content_post_id($default_content_id)
+            ) {
+
+                $default_content_post = get_post($default_content_id);
+
+                if ($default_content_post) {
+
+                    $content_posts[] = array(
+                        'id' => absint($default_content_post->ID),
+                        /* translators: %d: Page ID. */
+                        'title' => $default_content_post->post_title ? $default_content_post->post_title : sprintf(__('Page #%d', 'sidemenu'), absint($default_content_post->ID)),
+                        'editLink' => current_user_can('edit_post', $default_content_post->ID) ? get_edit_post_link($default_content_post->ID, '') : '',
+                    );
+
+                }
 
             }
 
@@ -452,8 +506,7 @@ if (!class_exists('sidemenu_block_class')) {
 
             if (
                 $default_content_id &&
-                'publish' === get_post_status($default_content_id) &&
-                self::CONTENT_POST_TYPE === get_post_type($default_content_id)
+                self::sidemenu_is_valid_content_post_id($default_content_id)
             ) {
 
                 return $default_content_id;
@@ -673,10 +726,7 @@ if (!class_exists('sidemenu_block_class')) {
 
             if (
                 $content_id &&
-                (
-                    'publish' !== get_post_status($content_id) ||
-                    self::CONTENT_POST_TYPE !== get_post_type($content_id)
-                )
+                !self::sidemenu_is_valid_content_post_id($content_id)
             ) {
 
                 return new WP_Error('sidemenu_invalid_content_id', __('Invalid SideMenu content.', 'sidemenu'), array('status' => 400));
@@ -963,7 +1013,10 @@ if (!class_exists('sidemenu_block_class')) {
 
             if (
                 !$content_post ||
-                self::CONTENT_POST_TYPE !== $content_post->post_type ||
+                (
+                    self::CONTENT_POST_TYPE !== $content_post->post_type &&
+                    !self::sidemenu_is_saved_legacy_page_content_id($content_post->ID)
+                ) ||
                 'publish' !== $content_post->post_status
             ) {
 
