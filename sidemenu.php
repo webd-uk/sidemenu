@@ -580,7 +580,7 @@ if (!class_exists('sidemenu_block_class')) {
 
             }
 
-            return array_values(array_diff($allowed_block_types, array('sidemenu/sidemenu')));
+            return array_values(array_diff($allowed_block_types, array('sidemenu/sidemenu', 'sidemenu-block/sidemenu')));
 
         }
 
@@ -957,7 +957,7 @@ if (!class_exists('sidemenu_block_class')) {
             }
 
             return preg_replace(
-                '/<div([^>]*)class="([^"\n]*wp-block-sidemenu-sidemenu[^"\n]*)"([^>]*)>/',
+                '/<div([^>]*)class="([^"\n]*wp-block-(?:sidemenu|sidemenu-block)-sidemenu[^"\n]*)"([^>]*)>/',
                 '<div$1class="$2"$3 data-sidemenu-content-id="' . absint($content_id) . '">',
                 $block_content,
                 1
@@ -972,7 +972,7 @@ if (!class_exists('sidemenu_block_class')) {
                 !$block_content ||
                 !is_array($block) ||
                 !isset($block['blockName']) ||
-                'sidemenu/sidemenu' !== $block['blockName']
+                !in_array($block['blockName'], array('sidemenu/sidemenu', 'sidemenu-block/sidemenu'), true)
             ) {
 
                 return $block_content;
