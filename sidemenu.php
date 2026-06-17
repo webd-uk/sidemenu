@@ -1059,10 +1059,11 @@ if (!class_exists('sidemenu_block_class')) {
             $settings = self::sidemenu_get_panel_settings($content_id);
             $panel_style = self::sidemenu_panel_style($settings);
             $close_button = self::sidemenu_block_close_button_html($content_id, $settings);
+            $legacy_page_class = self::sidemenu_is_saved_legacy_page_content_id($content_id) ? ' sidemenu-block-legacy-page-panel' : '';
 
             ob_start();
 
-?><section class="sidemenu-block-panel sidemenu-position-<?php echo esc_attr($position); ?>" id="sidemenu-block-panel-<?php echo esc_attr($content_id); ?>" data-sidemenu-panel-id="<?php echo esc_attr($content_id); ?>" data-sidemenu-position="<?php echo esc_attr($position); ?>" data-sidemenu-scroll-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['scrollClose']))); ?>" data-sidemenu-cover-click-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['coverClickClose']))); ?>" data-sidemenu-auto-open="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['autoOpen']))); ?>" data-sidemenu-auto-open-delay="<?php echo esc_attr(absint($settings['autoOpenDelay'])); ?>" data-sidemenu-cover-color="<?php echo esc_attr($settings['coverColor']); ?>"<?php echo $panel_style ? ' style="' . esc_attr($panel_style) . '"' : ''; ?> aria-hidden="true">
+?><section class="sidemenu-block-panel sidemenu-position-<?php echo esc_attr($position); ?><?php echo esc_attr($legacy_page_class); ?>" id="sidemenu-block-panel-<?php echo esc_attr($content_id); ?>" data-sidemenu-panel-id="<?php echo esc_attr($content_id); ?>" data-sidemenu-position="<?php echo esc_attr($position); ?>" data-sidemenu-scroll-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['scrollClose']))); ?>" data-sidemenu-cover-click-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['coverClickClose']))); ?>" data-sidemenu-auto-open="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['autoOpen']))); ?>" data-sidemenu-auto-open-delay="<?php echo esc_attr(absint($settings['autoOpenDelay'])); ?>" data-sidemenu-cover-color="<?php echo esc_attr($settings['coverColor']); ?>"<?php echo $panel_style ? ' style="' . esc_attr($panel_style) . '"' : ''; ?> aria-hidden="true">
     <?php echo wp_kses($close_button, self::sidemenu_allowed_close_button_html()); ?>
     <div class="sidemenu-block-content"><?php
         // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Content has passed through WordPress's standard the_content pipeline.

@@ -52,6 +52,11 @@
     visibility: hidden;
 }
 
+.sidemenu-block-panel.sidemenu-block-legacy-page-panel {
+    background: var(--wp--preset--color--base, var(--wp--preset--color--background, #fff));
+    color: var(--wp--preset--color--contrast, #111);
+}
+
 .sidemenu-block-panel.sidemenu-position-left {
     right: auto;
     left: 0;
