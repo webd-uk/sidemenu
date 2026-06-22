@@ -580,7 +580,7 @@ if (!class_exists('sidemenu_block_class')) {
 
             }
 
-            return array_values(array_diff($allowed_block_types, array('sidemenu/sidemenu', 'sidemenu-block/sidemenu')));
+            return array_values(array_diff($allowed_block_types, array('sidemenu/sidemenu', 'slidey-panel/panel')));
 
         }
 
@@ -942,26 +942,17 @@ if (!class_exists('sidemenu_block_class')) {
 
         public static function sidemenu_add_block_data_attribute($block_content, $content_id) {
 
-            if (class_exists('WP_HTML_Tag_Processor')) {
+            $processor = new WP_HTML_Tag_Processor($block_content);
 
-                $processor = new WP_HTML_Tag_Processor($block_content);
+            if ($processor->next_tag()) {
 
-                if ($processor->next_tag()) {
+                $processor->set_attribute('data-sidemenu-content-id', absint($content_id));
 
-                    $processor->set_attribute('data-sidemenu-content-id', absint($content_id));
-
-                    return $processor->get_updated_html();
-
-                }
+                return $processor->get_updated_html();
 
             }
 
-            return preg_replace(
-                '/<div([^>]*)class="([^"\n]*wp-block-(?:sidemenu|sidemenu-block)-sidemenu[^"\n]*)"([^>]*)>/',
-                '<div$1class="$2"$3 data-sidemenu-content-id="' . absint($content_id) . '">',
-                $block_content,
-                1
-            );
+            return $block_content;
 
         }
 
@@ -972,7 +963,8 @@ if (!class_exists('sidemenu_block_class')) {
                 !$block_content ||
                 !is_array($block) ||
                 !isset($block['blockName']) ||
-                !in_array($block['blockName'], array('sidemenu/sidemenu', 'sidemenu-block/sidemenu'), true)
+                !in_array($block['blockName'], array('sidemenu/sidemenu', 'slidey-panel/panel'), true) ||
+                ('slidey-panel/panel' === $block['blockName'] && class_exists('slidey_panel_class'))
             ) {
 
                 return $block_content;
