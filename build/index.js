@@ -15,6 +15,7 @@
     var useState = wp.element.useState;
     var apiFetch = wp.apiFetch;
     var data = wp.data;
+    var blocks = wp.blocks;
     var applyFilters = wp.hooks && wp.hooks.applyFilters
         ? wp.hooks.applyFilters
         : function(hookName, value) {
@@ -33,6 +34,8 @@
             defaultContentId: 0,
             createContentUrl: '',
             canCreateContent: false,
+            canManageDefaultContent: false,
+            slideyPanelActive: false,
             customizeUrl: '',
             classicCustomizerAvailable: false,
             restNamespace: 'sidemenu/v1',
@@ -47,6 +50,36 @@
 
     function isClassicMode(attributes) {
         return !attributes.mode || 'classic' === attributes.mode;
+    }
+
+    // Keep saved Slidey Panel blocks editable after Slidey Panel has been deactivated.
+    function registerSlideyPanelAlias() {
+        var sourceSettings;
+        var aliasSettings;
+
+        if (
+            !blocks ||
+            !blocks.getBlockType ||
+            !blocks.registerBlockType ||
+            blocks.getBlockType('slidey-panel/panel')
+        ) {
+            return;
+        }
+
+        sourceSettings = blocks.getBlockType('sidemenu/sidemenu');
+
+        if (!sourceSettings) {
+            return;
+        }
+
+        aliasSettings = Object.assign({}, sourceSettings, {
+            name: 'slidey-panel/panel',
+            supports: Object.assign({}, sourceSettings.supports || {}, {
+                inserter: false
+            })
+        });
+
+        blocks.registerBlockType('slidey-panel/panel', aliasSettings);
     }
 
     function buttonTitle(attributes) {
@@ -241,14 +274,29 @@
             });
         });
 
-        return options;
+        return [{
+            label: __('Choose SideMenu content', 'sidemenu'),
+            value: '0'
+        }].concat(options);
     }
 
-	    function contentControls(contentState, setContentState) {
+    function contentControls(contentState, setContentState) {
         var selectedContent = contentPostById(contentState.contentPosts, contentState.defaultContentId);
         var controls = [];
 
-        if (contentState.contentPosts.length > 1) {
+        if (contentState.slideyPanelActive) {
+            return [
+                el('p', null, __('Slidey Panel plugin is active. This block uses the Page selected in Slidey Panel. Deactivate Slidey Panel plugin to choose SideMenu content and use SideMenu panel settings.', 'sidemenu'))
+            ];
+        }
+
+        if (!contentState.canManageDefaultContent) {
+            return [
+                el('p', null, __('You do not have sufficient permission to choose the default SideMenu content.', 'sidemenu'))
+            ];
+        }
+
+        if (contentState.contentPosts.length > 1 || (contentState.contentPosts.length && !selectedContent)) {
             controls.push(
                 el(SelectControl, {
                     label: __('Default SideMenu content', 'sidemenu'),
@@ -266,6 +314,7 @@
                             setContentState(Object.assign({}, contentState, {
                                 contentPosts: response.contentPosts,
                                 defaultContentId: response.defaultContentId,
+                                canManageDefaultContent: response.canManageDefaultContent || false,
                                 isSaving: false
                             }));
                         }).catch(function() {
@@ -534,6 +583,8 @@
                 defaultContentId: initialData.defaultContentId || 0,
                 createContentUrl: initialData.createContentUrl || '',
                 canCreateContent: initialData.canCreateContent || false,
+                canManageDefaultContent: initialData.canManageDefaultContent || false,
+                slideyPanelActive: initialData.slideyPanelActive || false,
                 restNamespace: initialData.restNamespace || 'sidemenu/v1',
                 premiumBlockActive: initialData.premiumBlockActive || false,
                 classicCustomizerAvailable: initialData.classicCustomizerAvailable || false,
@@ -728,4 +779,7 @@
             }
         ]
     });
+
+    registerSlideyPanelAlias();
+
 })(window.wp);

@@ -52,7 +52,7 @@
     visibility: hidden;
 }
 
-.sidemenu-block-panel.sidemenu-block-legacy-page-panel {
+.sidemenu-block-panel.sidemenu-block-page-panel {
     background: var(--wp--preset--color--base, var(--wp--preset--color--background, #fff));
     color: var(--wp--preset--color--contrast, #111);
 }

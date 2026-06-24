@@ -2,7 +2,7 @@
     'use strict';
 
     const selectors = {
-        button: '.wp-block-sidemenu-sidemenu.sidemenu-block-mode[data-sidemenu-content-id] a',
+        button: '.wp-block-sidemenu-sidemenu.sidemenu-block-mode[data-sidemenu-content-id] a, .wp-block-slidey-panel-panel.slidey-panel-mode[data-sidemenu-content-id] a',
         panel: '.sidemenu-block-panel',
         cover: '.sidemenu-block-cover',
         close: '.sidemenu-block-close'
@@ -119,7 +119,7 @@
     };
 
     const openPanel = function(trigger) {
-        const wrapper = trigger.closest('.wp-block-sidemenu-sidemenu');
+        const wrapper = trigger.closest('.wp-block-sidemenu-sidemenu, .wp-block-slidey-panel-panel');
         const contentId = wrapper ? wrapper.dataset.sidemenuContentId : '';
         const panel = contentId ? getPanel(contentId) : null;
         const cover = getCover();

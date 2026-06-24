@@ -431,6 +431,44 @@ if (!class_exists('sidemenu_block_class')) {
 
         }
 
+        public static function sidemenu_get_slidey_panel_content_id() {
+
+            $content_id = absint(get_option('slidey_panel_default_content_id'));
+
+            if (
+                $content_id &&
+                'page' === get_post_type($content_id) &&
+                'publish' === get_post_status($content_id)
+            ) {
+
+                return $content_id;
+
+            }
+
+            return 0;
+
+        }
+
+        public static function sidemenu_is_slidey_panel_page_content_id($content_id) {
+
+            $content_id = absint($content_id);
+
+            return (
+                $content_id &&
+                $content_id === self::sidemenu_get_slidey_panel_content_id()
+            );
+
+        }
+
+        public static function sidemenu_is_supported_page_content_id($content_id) {
+
+            return (
+                self::sidemenu_is_saved_legacy_page_content_id($content_id) ||
+                self::sidemenu_is_slidey_panel_page_content_id($content_id)
+            );
+
+        }
+
         public static function sidemenu_is_valid_content_post_id($content_id) {
 
             $content_id = absint($content_id);
@@ -500,7 +538,7 @@ if (!class_exists('sidemenu_block_class')) {
 
         }
 
-        public static function sidemenu_get_default_content_id($maybe_set = true) {
+        public static function sidemenu_get_default_content_id($maybe_set = false) {
 
             $default_content_id = absint(get_option(self::DEFAULT_CONTENT_OPTION));
 
@@ -515,14 +553,19 @@ if (!class_exists('sidemenu_block_class')) {
 
             if ($default_content_id) {
 
-                delete_option(self::DEFAULT_CONTENT_OPTION);
+                if (self::sidemenu_can_manage_default_content()) {
+
+                    delete_option(self::DEFAULT_CONTENT_OPTION);
+
+                }
+
                 $default_content_id = 0;
 
             }
 
             $content_posts = self::sidemenu_get_content_posts();
 
-            if ($maybe_set && count($content_posts)) {
+            if ($maybe_set && self::sidemenu_can_manage_default_content() && count($content_posts)) {
 
                 $default_content_id = absint($content_posts[0]['id']);
                 update_option(self::DEFAULT_CONTENT_OPTION, $default_content_id, false);
@@ -556,6 +599,12 @@ if (!class_exists('sidemenu_block_class')) {
         public static function sidemenu_can_use_block() {
 
             return (bool) apply_filters('sidemenu_can_use_block', current_user_can('edit_pages'));
+
+        }
+
+        public static function sidemenu_can_manage_default_content() {
+
+            return current_user_can('manage_options');
 
         }
 
@@ -596,6 +645,8 @@ if (!class_exists('sidemenu_block_class')) {
                 'contentPostType' => self::CONTENT_POST_TYPE,
                 'createContentUrl' => $can_create_content ? admin_url('post-new.php?post_type=' . self::CONTENT_POST_TYPE) : '',
                 'canCreateContent' => $can_create_content,
+                'canManageDefaultContent' => self::sidemenu_can_manage_default_content(),
+                'slideyPanelActive' => class_exists('slidey_panel_class'),
                 'customizeUrl' => self::sidemenu_classic_customizer_url(),
                 'classicCustomizerAvailable' => self::sidemenu_should_load_classic_runtime(),
                 'restNamespace' => 'sidemenu/v1',
@@ -669,7 +720,7 @@ if (!class_exists('sidemenu_block_class')) {
                 array(
                     'methods' => 'POST',
                     'callback' => array($this, 'sidemenu_rest_set_default_content'),
-                    'permission_callback' => array($this, 'sidemenu_rest_can_edit'),
+                    'permission_callback' => array(__CLASS__, 'sidemenu_can_manage_default_content'),
                     'args' => array(
                         'contentId' => array(
                             'type' => 'integer',
@@ -704,6 +755,8 @@ if (!class_exists('sidemenu_block_class')) {
                 array(
                     'contentPosts' => self::sidemenu_get_content_posts(),
                     'defaultContentId' => self::sidemenu_get_default_content_id(),
+                    'canManageDefaultContent' => self::sidemenu_can_manage_default_content(),
+                    'slideyPanelActive' => class_exists('slidey_panel_class'),
                 )
             );
 
@@ -723,6 +776,12 @@ if (!class_exists('sidemenu_block_class')) {
         public function sidemenu_rest_set_default_content($request) {
 
             $content_id = absint($request->get_param('contentId'));
+
+            if (class_exists('slidey_panel_class')) {
+
+                return new WP_Error('sidemenu_slidey_panel_active', __('Deactivate Slidey Panel before choosing SideMenu content.', 'sidemenu'), array('status' => 409));
+
+            }
 
             if (
                 $content_id &&
@@ -749,7 +808,9 @@ if (!class_exists('sidemenu_block_class')) {
 
         public static function sidemenu_get_block_content_id($attributes = array()) {
 
-            $content_id = self::sidemenu_get_default_content_id();
+            $content_id = class_exists('slidey_panel_class')
+                ? self::sidemenu_get_slidey_panel_content_id()
+                : self::sidemenu_get_default_content_id();
 
             return absint(apply_filters('sidemenu_block_content_id', $content_id, $attributes));
 
@@ -984,6 +1045,12 @@ if (!class_exists('sidemenu_block_class')) {
 
             $content_id = self::sidemenu_get_block_content_id($attributes);
 
+            if ('slidey-panel/panel' === $block['blockName'] && !$content_id) {
+
+                $content_id = self::sidemenu_get_slidey_panel_content_id();
+
+            }
+
             if (!$content_id) {
 
                 return $block_content;
@@ -1007,7 +1074,7 @@ if (!class_exists('sidemenu_block_class')) {
                 !$content_post ||
                 (
                     self::CONTENT_POST_TYPE !== $content_post->post_type &&
-                    !self::sidemenu_is_saved_legacy_page_content_id($content_post->ID)
+                    !self::sidemenu_is_supported_page_content_id($content_post->ID)
                 ) ||
                 'publish' !== $content_post->post_status
             ) {
@@ -1051,11 +1118,11 @@ if (!class_exists('sidemenu_block_class')) {
             $settings = self::sidemenu_get_panel_settings($content_id);
             $panel_style = self::sidemenu_panel_style($settings);
             $close_button = self::sidemenu_block_close_button_html($content_id, $settings);
-            $legacy_page_class = self::sidemenu_is_saved_legacy_page_content_id($content_id) ? ' sidemenu-block-legacy-page-panel' : '';
+            $page_content_class = self::sidemenu_is_supported_page_content_id($content_id) ? ' sidemenu-block-page-panel' : '';
 
             ob_start();
 
-?><section class="sidemenu-block-panel sidemenu-position-<?php echo esc_attr($position); ?><?php echo esc_attr($legacy_page_class); ?>" id="sidemenu-block-panel-<?php echo esc_attr($content_id); ?>" data-sidemenu-panel-id="<?php echo esc_attr($content_id); ?>" data-sidemenu-position="<?php echo esc_attr($position); ?>" data-sidemenu-scroll-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['scrollClose']))); ?>" data-sidemenu-cover-click-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['coverClickClose']))); ?>" data-sidemenu-auto-open="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['autoOpen']))); ?>" data-sidemenu-auto-open-delay="<?php echo esc_attr(absint($settings['autoOpenDelay'])); ?>" data-sidemenu-cover-color="<?php echo esc_attr($settings['coverColor']); ?>"<?php echo $panel_style ? ' style="' . esc_attr($panel_style) . '"' : ''; ?> aria-hidden="true">
+?><section class="sidemenu-block-panel sidemenu-position-<?php echo esc_attr($position); ?><?php echo esc_attr($page_content_class); ?>" id="sidemenu-block-panel-<?php echo esc_attr($content_id); ?>" data-sidemenu-panel-id="<?php echo esc_attr($content_id); ?>" data-sidemenu-position="<?php echo esc_attr($position); ?>" data-sidemenu-scroll-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['scrollClose']))); ?>" data-sidemenu-cover-click-close="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['coverClickClose']))); ?>" data-sidemenu-auto-open="<?php echo esc_attr(self::sidemenu_bool_attr(!empty($settings['autoOpen']))); ?>" data-sidemenu-auto-open-delay="<?php echo esc_attr(absint($settings['autoOpenDelay'])); ?>" data-sidemenu-cover-color="<?php echo esc_attr($settings['coverColor']); ?>"<?php echo $panel_style ? ' style="' . esc_attr($panel_style) . '"' : ''; ?> aria-hidden="true">
     <?php echo wp_kses($close_button, self::sidemenu_allowed_close_button_html()); ?>
     <div class="sidemenu-block-content"><?php
         // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Content has passed through WordPress's standard the_content pipeline.
