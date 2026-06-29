@@ -158,6 +158,18 @@ if (!class_exists('sidemenuCommon')) {
 
         }
 
+        public static function services_url() {
+
+            return add_query_arg(
+                array(
+                    'utm_campaign' => 'plugin-row-meta',
+                    'utm_term' => self::$plugin_text_domain,
+                ),
+                'https://webd.uk/services/'
+            );
+
+        }
+
         public static function control_upgrade_text($product = false) {
 
             if ($product) {
@@ -476,6 +488,7 @@ if (!class_exists('sidemenuCommon')) {
             if ($plugin_file === self::$plugin_text_domain . '/' . self::$plugin_text_domain . '.php') {
 
                 $plugin_meta[] = '<a href="' . esc_url(self::support_url()) . '" title="' . __('Problems? We are here to help!', 'sidemenu') . '" style="color: orange; font-weight: bold;">' . __('Need help?', 'sidemenu') . '</a>';
+                $plugin_meta[] = '<a href="' . esc_url(self::services_url()) . '" title="' . esc_attr(__('Other services from Web:D', 'sidemenu')) . '">' . __('Web:D Services', 'sidemenu') . '</a>';
 /* translators: name of the plugin */
                 $plugin_meta[] = '<a href="https://wordpress.org/support/plugin/' . 'sidemenu' . '/reviews/#new-post" title="' . esc_attr(sprintf(__('If you like %s, please leave a review!', 'sidemenu'), self::$plugin_name)) . '">' . __('Review plugin', 'sidemenu') . '</a>';
 
@@ -495,17 +508,44 @@ if (!class_exists('sidemenuCommon')) {
 
             check_ajax_referer(self::$plugin_prefix . '-ajax-nonce');
 
-            if (is_user_logged_in()) {
+            if (current_user_can('manage_options')) {
 
-                update_user_meta(get_current_user_id(), self::$plugin_prefix . '-notice-dismissed', self::plugin_version());
+                $user_id = get_current_user_id();
+
+                update_user_meta($user_id, self::$plugin_prefix . '-notice-dismissed', self::plugin_version());
 
                 if (isset($_REQUEST['donated']) && $_REQUEST['donated'] == 'true') {
 
-    				update_option(self::$plugin_prefix . '_donated', true);
+                    update_option(self::$plugin_prefix . '_donated', true);
 
                 }
 
             }
+
+        }
+
+        public static function should_show_admin_notice() {
+
+            if (!current_user_can('manage_options')) {
+
+                return false;
+
+            }
+
+            global $pagenow;
+
+            $allowed_pages = array('index.php', 'plugins.php');
+
+            /**
+             * Filters the admin pages where plugin notices may be shown.
+             *
+             * The dynamic portion of the hook name is the plugin prefix.
+             *
+             * @param array $allowed_pages List of allowed admin page filenames.
+             */
+            $allowed_pages = apply_filters(self::$plugin_prefix . '_admin_notice_pages', $allowed_pages);
+
+            return is_array($allowed_pages) && in_array($pagenow, $allowed_pages, true);
 
         }
 
@@ -514,6 +554,12 @@ if (!class_exists('sidemenuCommon')) {
             if ($product) {
 
                 return self::with_upgrade_product($product, array(__CLASS__, 'admin_notices'));
+
+            }
+
+            if (!self::should_show_admin_notice()) {
+
+                return;
 
             }
 
@@ -618,14 +664,6 @@ echo esc_attr(sprintf(__('Upgrade now to %s Premium', 'sidemenu'), self::$plugin
 
     </p>
 
-    <hr style="margin:12px 0;">
-
-    <p>
-        <strong>✨ Need help with your WordPress site?</strong>
-        🚀 Slow, want new features, or need a glow-up?
-        <a href="https://webd.uk/services/?utm_campaign=notice&utm_term=sidemenu" class="button-secondary" style="margin-left:6px; vertical-align: middle;">Explore our services</a>
-    </p>
-
 </div>
 
 <script type="text/javascript">
@@ -668,15 +706,7 @@ printf(esc_html(__('Thank you for using %s plugin', 'sidemenu')), esc_html(self:
 
     <p><a href="<?php echo esc_url(self::upgrade_link()); ?>" title="<?php
 /* translators: name of the plugin */
-echo esc_attr(sprintf(__('Contribute to %s', 'sidemenu'), self::$plugin_name)); ?>" class="button-primary"><?php echo esc_html(__('Buy us a coffee ☕️', 'sidemenu')); ?></a> <a href="#" id="<?php echo esc_attr(self::$plugin_prefix); ?>-already-paid" title="<?php echo esc_attr(__('Aleady Contributed!', 'sidemenu')); ?>" class="button-secondary"><?php esc_html_e('Aleady Contributed!', 'sidemenu'); ?></a></p>
-
-    <hr style="margin:12px 0;">
-
-    <p>
-        <strong>✨ Need help with your WordPress site?</strong>
-        🚀 Slow, want new features, or need a glow-up?
-        <a href="https://webd.uk/services/?utm_campaign=notice&utm_term=sidemenu" class="button-secondary" style="margin-left:6px; vertical-align: middle;">Explore our services</a>
-    </p>
+echo esc_attr(sprintf(__('Contribute to %s', 'sidemenu'), self::$plugin_name)); ?>" class="button-primary"><?php echo esc_html(__('Buy us a coffee ☕️', 'sidemenu')); ?></a> <a href="#" id="<?php echo esc_attr(self::$plugin_prefix); ?>-already-paid" title="<?php echo esc_attr(__('Already Contributed!', 'sidemenu')); ?>" class="button-secondary"><?php esc_html_e('Already Contributed!', 'sidemenu'); ?></a></p>
 
 </div>
 
