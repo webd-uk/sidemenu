@@ -56,6 +56,7 @@
     function registerSlideyPanelAlias() {
         var sourceSettings;
         var aliasSettings;
+        var slideyPanelAttributes;
 
         if (
             !blocks ||
@@ -72,11 +73,22 @@
             return;
         }
 
+        slideyPanelAttributes = Object.assign({}, sourceSettings.attributes || {}, {
+            title: Object.assign({}, (sourceSettings.attributes || {}).title || {}, {
+                default: __('Slidey Panel', 'sidemenu')
+            })
+        });
+
         aliasSettings = Object.assign({}, sourceSettings, {
             name: 'slidey-panel/panel',
+            title: __('Slidey Panel Open Button', 'sidemenu'),
+            attributes: slideyPanelAttributes,
             supports: Object.assign({}, sourceSettings.supports || {}, {
                 inserter: false
-            })
+            }),
+            save: function(props) {
+                return slideyPanelButtonSave(props.attributes);
+            }
         });
 
         blocks.registerBlockType('slidey-panel/panel', aliasSettings);
@@ -244,6 +256,52 @@
                 'a',
                 isClassicMode(attributes) ? { href: '#' } : buttonLinkProps(attributes),
                 isClassicMode(attributes) ? buttonTitle(attributes) : buttonContents(attributes)
+            )
+        );
+    }
+
+    function slideyPanelClassName(className) {
+        return className ? className.replace(/\bsidemenu-/g, 'slidey-panel-') : className;
+    }
+
+    function slideyPanelContentElement(content) {
+        var props;
+
+        if (!content || !content.props) {
+            return content;
+        }
+
+        props = Object.assign({}, content.props);
+
+        if (props.className) {
+            props.className = slideyPanelClassName(props.className);
+        }
+
+        if (props.children && Array.isArray(props.children)) {
+            props.children = props.children.map(slideyPanelContentElement);
+        }
+
+        return el(content.type, props, props.children);
+    }
+
+    function slideyPanelButtonSave(attributes) {
+        attributes = Object.assign({ title: __('Slidey Panel', 'sidemenu') }, attributes);
+
+        var saveProps = {
+            className: 'slidey-panel-mode'
+        };
+        var linkProps = buttonLinkProps(attributes);
+
+        saveProps['data-slidey-panel-mode'] = 'block';
+        linkProps.className = slideyPanelClassName(linkProps.className);
+
+        return el(
+            'div',
+            wp.blockEditor.useBlockProps.save(saveProps),
+            el(
+                'a',
+                linkProps,
+                buttonContents(attributes).map(slideyPanelContentElement)
             )
         );
     }
